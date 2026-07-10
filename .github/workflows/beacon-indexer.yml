@@ -35,3 +35,16 @@ jobs:
           MAX_PER_QUERY: "80"
           THROTTLE_SECS: "2"
         run: python scraper_agent.py
+
+      - name: Refresh reachability matrix
+        # After harvesting, run the serverless batch validator so the online/
+        # reachable matrix refreshes every 6h. Non-fatal: never fail the run on
+        # a transient validator hiccup.
+        continue-on-error: true
+        env:
+          REGISTRY_URL: ${{ secrets.REGISTRY_URL || 'https://registry-ruby.vercel.app' }}
+        run: |
+          echo "Triggering batch validation..."
+          curl -sS -X POST "${REGISTRY_URL%/}/api/v1/validate?limit=100" \
+            -H "content-type: application/json" \
+            -w "\nHTTP %{http_code}\n"

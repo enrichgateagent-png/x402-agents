@@ -20,7 +20,7 @@ import requests
 from fastapi import BackgroundTasks, FastAPI, HTTPException, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
-from pydantic import BaseModel, Field, field_validator
+from pydantic import AliasChoices, BaseModel, Field, field_validator
 
 import turso
 
@@ -157,9 +157,18 @@ class DiscoverRequest(BaseModel):
 
 class TelemetryRequest(BaseModel):
     agent_id: str = Field(..., min_length=1, max_length=256)
-    job_status: str = Field(..., min_length=1, max_length=32)
+    # Accept the canonical `status` key and the legacy `job_status` alias so
+    # every SDK/monkey-patch version keeps working.
+    status: str = Field(
+        ...,
+        min_length=1,
+        max_length=32,
+        validation_alias=AliasChoices("status", "job_status"),
+    )
 
-    @field_validator("job_status")
+    model_config = {"populate_by_name": True}
+
+    @field_validator("status")
     @classmethod
     def _valid_status(cls, v: str) -> str:
         v = v.strip().lower()
@@ -167,7 +176,7 @@ class TelemetryRequest(BaseModel):
             return "success"
         if v in {"fail", "failed", "failure", "error", "false", "0"}:
             return "fail"
-        raise ValueError("job_status must indicate success or failure")
+        raise ValueError("status must indicate success or failure")
 
 
 # --------------------------------------------------------------------------- #
@@ -281,11 +290,30 @@ def discover(req: DiscoverRequest) -> dict:
 
 @app.post("/api/v1/telemetry")
 def telemetry(req: TelemetryRequest) -> dict:
-    """Heartbeat + job monitor. Atomic counter update recomputes success_rate."""
-    _ensure_ready()
-    now = _utcnow().isoformat()
-    is_success = 1 if req.job_status == "success" else 0
+    """
+    Reputation engine. Accepts {"agent_id", "status": "success"|"fail"} and
+    atomically recomputes the agent's counters and success_rate in Turso:
 
+        total_transactions       += 1
+        successful_transactions  += (1 if success else 0)
+        success_rate              = successful_transactions / total_transactions
+
+    Rogue-metric guard: only a currently-registered agent_id can submit. The
+    UPDATE ... WHERE agent_id = ? is a no-op for unknown ids, which we detect and
+    reject with 404 — an unregistered/fake agent cannot move any ranking.
+    """
+    _ensure_ready()
+
+    # Reject unknown agents up front so fabricated ids can't touch the table.
+    exists = turso.execute("SELECT 1 AS x FROM agents WHERE agent_id = ?", [req.agent_id])
+    if not exists:
+        raise HTTPException(status_code=404, detail="agent_id not registered")
+
+    now = _utcnow().isoformat()
+    is_success = 1 if req.status == "success" else 0
+
+    # Single atomic statement: increment counters and recompute the ratio from
+    # the pre-increment values so the math is exact under concurrency.
     turso.execute(
         """
         UPDATE agents
@@ -298,10 +326,8 @@ def telemetry(req: TelemetryRequest) -> dict:
         """,
         [is_success, is_success, now, req.agent_id],
     )
-    row = turso.execute("SELECT * FROM agents WHERE agent_id = ?", [req.agent_id])
-    if not row:
-        raise HTTPException(status_code=404, detail="agent_id not registered")
-    return {"ok": True, "recorded": req.job_status, "agent": _row_to_public(row[0])}
+    row = turso.execute("SELECT * FROM agents WHERE agent_id = ?", [req.agent_id])[0]
+    return {"ok": True, "recorded": req.status, "agent": _row_to_public(row)}
 
 
 @app.post("/api/v1/validate")
