@@ -119,3 +119,13 @@ def ensure_schema() -> None:
     )
     execute("CREATE INDEX IF NOT EXISTS idx_agents_success ON agents(success_rate DESC)")
     execute("CREATE INDEX IF NOT EXISTS idx_agents_last_seen ON agents(last_seen DESC)")
+    # Additive columns for the endpoint validator. ADD COLUMN is idempotent-safe
+    # via try/except since SQLite has no "ADD COLUMN IF NOT EXISTS".
+    for ddl in (
+        "ALTER TABLE agents ADD COLUMN reachable INTEGER NOT NULL DEFAULT 1",
+        "ALTER TABLE agents ADD COLUMN last_validated TEXT",
+    ):
+        try:
+            execute(ddl)
+        except TursoError:
+            pass  # column already exists

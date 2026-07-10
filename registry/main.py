@@ -16,12 +16,17 @@ import os
 import re
 from datetime import datetime, timezone
 
-from fastapi import FastAPI, HTTPException, Request
+import requests
+from fastapi import BackgroundTasks, FastAPI, HTTPException, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 from pydantic import BaseModel, Field, field_validator
 
 import turso
+
+VALIDATION_TIMEOUT = float(os.environ.get("VALIDATION_TIMEOUT", "6"))
+# Endpoint schemes that are process-local (not HTTP) and can't be pinged.
+_NON_HTTP_PREFIXES = ("framework://", "eliza://", "local://", "mcp://")
 
 ONLINE_WINDOW_SECONDS = int(os.environ.get("REGISTRY_ONLINE_WINDOW", "300"))
 MAX_DISCOVER_RESULTS = int(os.environ.get("REGISTRY_MAX_RESULTS", "25"))
@@ -52,14 +57,19 @@ def _normalize_tags(raw: str) -> str:
 
 def _row_to_public(row: dict) -> dict:
     last_seen = row["last_seen"]
-    online = False
+    recent = False
     try:
         seen_dt = datetime.fromisoformat(last_seen)
         if seen_dt.tzinfo is None:
             seen_dt = seen_dt.replace(tzinfo=timezone.utc)
-        online = (_utcnow() - seen_dt).total_seconds() <= ONLINE_WINDOW_SECONDS
+        recent = (_utcnow() - seen_dt).total_seconds() <= ONLINE_WINDOW_SECONDS
     except (TypeError, ValueError):
-        online = False
+        recent = False
+    # An agent is "online" only if it was seen recently AND its endpoint last
+    # validated as reachable. `reachable` defaults to 1 for rows predating the
+    # validator column.
+    reachable = bool(int(row.get("reachable", 1) or 0))
+    online = recent and reachable
     return {
         "agent_id": row["agent_id"],
         "name": row["name"],
@@ -70,8 +80,54 @@ def _row_to_public(row: dict) -> dict:
         "successful_transactions": int(row["successful_transactions"]),
         "last_seen": last_seen,
         "created_at": row["created_at"],
+        "reachable": reachable,
+        "last_validated": row.get("last_validated"),
         "online": online,
     }
+
+
+# --------------------------------------------------------------------------- #
+# Endpoint validator
+# --------------------------------------------------------------------------- #
+
+def _probe(endpoint: str) -> bool:
+    """Lightweight reachability check. HEAD first, GET fallback. <400 or 405 = up."""
+    if not endpoint or endpoint.startswith(_NON_HTTP_PREFIXES):
+        # Process-local endpoints can't be HTTP-pinged; treat as reachable so we
+        # don't falsely mark in-framework agents offline.
+        return endpoint.startswith(_NON_HTTP_PREFIXES)
+    if not endpoint.startswith(("http://", "https://")):
+        return False
+    headers = {"User-Agent": "beacon-validator/1.0"}
+    try:
+        r = requests.head(endpoint, timeout=VALIDATION_TIMEOUT, allow_redirects=True, headers=headers)
+        if r.status_code < 400 or r.status_code in (403, 405):
+            return True
+        # Some hosts reject HEAD; confirm with a ranged GET.
+        r = requests.get(endpoint, timeout=VALIDATION_TIMEOUT, allow_redirects=True,
+                         headers={**headers, "Range": "bytes=0-0"}, stream=True)
+        r.close()
+        return r.status_code < 400 or r.status_code == 403
+    except requests.RequestException:
+        return False
+
+
+def validate_agent_endpoint(agent_id: str, endpoint: str) -> bool:
+    """
+    Background worker: ping an agent's endpoint and persist the result.
+    Sets reachable=1/0 and last_validated so discovery/leaderboard can surface
+    only live agents. Never raises — validation must not disturb the API.
+    """
+    now = _utcnow().isoformat()
+    try:
+        reachable = _probe(endpoint)
+        turso.execute(
+            "UPDATE agents SET reachable = ?, last_validated = ? WHERE agent_id = ?",
+            [1 if reachable else 0, now, agent_id],
+        )
+        return reachable
+    except Exception:
+        return False
 
 
 # --------------------------------------------------------------------------- #
@@ -162,8 +218,11 @@ def healthz() -> dict:
 
 
 @app.post("/api/v1/register")
-def register(req: RegisterRequest) -> dict:
-    """Self-Discovery hook. Atomic UPSERT: insert new, or refresh existing."""
+def register(req: RegisterRequest, background_tasks: BackgroundTasks) -> dict:
+    """Self-Discovery hook. Atomic UPSERT: insert new, or refresh existing.
+
+    Schedules an endpoint validation to run after the response is returned.
+    """
     _ensure_ready()
     now = _utcnow().isoformat()
     tags = _normalize_tags(req.capabilities)
@@ -187,6 +246,8 @@ def register(req: RegisterRequest) -> dict:
         [req.agent_id, req.name, req.mcp_endpoint, tags, now, now],
     )
     row = turso.execute("SELECT * FROM agents WHERE agent_id = ?", [req.agent_id])[0]
+    # Fire the endpoint validation after the response is sent.
+    background_tasks.add_task(validate_agent_endpoint, req.agent_id, req.mcp_endpoint)
     return {"ok": True, "status": status, "agent": _row_to_public(row)}
 
 
@@ -243,8 +304,32 @@ def telemetry(req: TelemetryRequest) -> dict:
     return {"ok": True, "recorded": req.job_status, "agent": _row_to_public(row[0])}
 
 
+@app.post("/api/v1/validate")
+def validate_batch(limit: int = 25) -> dict:
+    """
+    Batch validator — the serverless-reliable path (call from cron). Re-checks the
+    least-recently-validated agents and persists reachability. On Vercel, the
+    per-register BackgroundTask may be frozen after the response, so this endpoint
+    guarantees validation coverage when hit on a schedule.
+    """
+    _ensure_ready()
+    limit = max(1, min(limit, 100))
+    rows = turso.execute(
+        "SELECT agent_id, mcp_endpoint FROM agents "
+        "ORDER BY (last_validated IS NULL) DESC, last_validated ASC LIMIT ?",
+        [limit],
+    )
+    checked, online, offline = 0, 0, 0
+    for r in rows:
+        ok = validate_agent_endpoint(r["agent_id"], r["mcp_endpoint"])
+        checked += 1
+        online += 1 if ok else 0
+        offline += 0 if ok else 1
+    return {"ok": True, "checked": checked, "online": online, "offline": offline}
+
+
 @app.get("/api/v1/leaderboard")
-def leaderboard(limit: int = 50) -> dict:
+def leaderboard(limit: int = 50, online_only: bool = False) -> dict:
     """
     Public leaderboard: top agents ranked by reputation (success_rate DESC, then
     volume). Returns a flat JSON array plus a top-level total_count of every
@@ -258,7 +343,10 @@ def leaderboard(limit: int = 50) -> dict:
         "SELECT * FROM agents ORDER BY success_rate DESC, total_transactions DESC LIMIT ?",
         [limit],
     )
-    return {"ok": True, "total_count": total_count, "leaderboard": [_row_to_public(r) for r in rows]}
+    board = [_row_to_public(r) for r in rows]
+    if online_only:
+        board = [a for a in board if a["online"]]
+    return {"ok": True, "total_count": total_count, "leaderboard": board}
 
 
 @app.get("/api/v1/agents")

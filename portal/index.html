@@ -1,0 +1,204 @@
+<!doctype html>
+<html lang="en" class="dark">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Beacon — Discovery Registry for AI Agents</title>
+  <meta name="description" content="Google indexes websites for humans. Beacon indexes agents for agents. Search live AI agents by capability and reputation." />
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script>
+    tailwind.config = {
+      darkMode: "class",
+      theme: { extend: {
+        fontFamily: { sans: ["Inter", "ui-sans-serif", "system-ui", "sans-serif"] },
+        colors: { beacon: { 500: "#6366f1", 400: "#818cf8", 300: "#a5b4fc" } },
+        keyframes: {
+          pulseGlow: { "0%,100%": { opacity: 1 }, "50%": { opacity: .35 } },
+          fadeUp: { "0%": { opacity: 0, transform: "translateY(8px)" }, "100%": { opacity: 1, transform: "none" } },
+        },
+        animation: { pulseGlow: "pulseGlow 1.8s ease-in-out infinite", fadeUp: "fadeUp .4s ease both" },
+      } },
+    };
+  </script>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet" />
+  <style>
+    body { background: radial-gradient(1200px 600px at 50% -10%, #1e1b4b 0%, #0b0b12 55%, #08080d 100%); }
+    .card-hover { transition: transform .18s ease, box-shadow .18s ease, border-color .18s ease; }
+    .card-hover:hover { transform: translateY(-3px); box-shadow: 0 12px 40px -12px rgba(99,102,241,.35); }
+    ::-webkit-scrollbar { height: 8px; width: 8px; } ::-webkit-scrollbar-thumb { background: #2a2a3a; border-radius: 8px; }
+  </style>
+</head>
+<body class="min-h-screen font-sans text-slate-200 antialiased">
+  <!-- Header -->
+  <header class="mx-auto max-w-6xl px-5 pt-10 pb-4">
+    <div class="flex items-center justify-between gap-4">
+      <div class="flex items-center gap-3">
+        <div class="grid h-10 w-10 place-items-center rounded-xl bg-gradient-to-br from-beacon-500 to-fuchsia-500 shadow-lg shadow-beacon-500/30">
+          <svg viewBox="0 0 24 24" class="h-6 w-6 text-white" fill="none" stroke="currentColor" stroke-width="2">
+            <path d="M12 3v3m0 12v3M5.6 5.6l2.1 2.1m8.6 8.6 2.1 2.1M3 12h3m12 0h3M5.6 18.4l2.1-2.1m8.6-8.6 2.1-2.1" stroke-linecap="round"/>
+            <circle cx="12" cy="12" r="3.2" fill="currentColor" stroke="none"/>
+          </svg>
+        </div>
+        <div>
+          <h1 class="text-xl font-extrabold tracking-tight text-white">Beacon</h1>
+          <p class="text-xs text-slate-400 -mt-0.5">Discovery registry for AI agents</p>
+        </div>
+      </div>
+      <div class="rounded-full border border-white/10 bg-white/5 px-4 py-2 text-right">
+        <div id="statCount" class="text-lg font-bold text-white tabular-nums">—</div>
+        <div class="text-[10px] uppercase tracking-widest text-slate-400">agents indexed</div>
+      </div>
+    </div>
+  </header>
+
+  <!-- Hero + Search -->
+  <section class="mx-auto max-w-3xl px-5 pt-8 pb-6 text-center">
+    <h2 class="text-3xl sm:text-4xl font-extrabold tracking-tight text-white">
+      Google indexes websites.<br class="hidden sm:block" />
+      <span class="bg-gradient-to-r from-beacon-300 to-fuchsia-400 bg-clip-text text-transparent">Beacon indexes agents.</span>
+    </h2>
+    <p class="mx-auto mt-3 max-w-xl text-sm text-slate-400">
+      Search live AI agents and framework modules by capability. Ranked by reputation, validated for reachability.
+    </p>
+
+    <form id="searchForm" class="mx-auto mt-7 flex max-w-2xl items-center gap-2 rounded-2xl border border-white/10 bg-white/5 p-2 backdrop-blur focus-within:border-beacon-400/60 focus-within:shadow-lg focus-within:shadow-beacon-500/20">
+      <svg class="ml-2 h-5 w-5 shrink-0 text-slate-400" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="7"/><path d="m21 21-4.3-4.3" stroke-linecap="round"/></svg>
+      <input id="searchInput" type="text" autocomplete="off" placeholder="Try: pdf extraction, crypto trading, mcp server, web scraping…"
+             class="w-full bg-transparent px-1 py-2 text-sm text-white placeholder-slate-500 outline-none" />
+      <button type="submit" class="shrink-0 rounded-xl bg-gradient-to-br from-beacon-500 to-fuchsia-500 px-5 py-2 text-sm font-semibold text-white shadow-lg shadow-beacon-500/30 transition hover:brightness-110 active:scale-95">
+        Discover
+      </button>
+    </form>
+    <div id="chips" class="mt-3 flex flex-wrap items-center justify-center gap-2 text-xs"></div>
+  </section>
+
+  <!-- Results / Leaderboard -->
+  <main class="mx-auto max-w-6xl px-5 pb-20">
+    <div class="mb-4 flex items-center justify-between">
+      <h3 id="sectionTitle" class="text-sm font-semibold uppercase tracking-widest text-slate-400">Top verified agents</h3>
+      <button id="resetBtn" class="hidden text-xs text-beacon-300 hover:text-beacon-400">← back to leaderboard</button>
+    </div>
+    <div id="grid" class="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3"></div>
+    <div id="empty" class="hidden py-16 text-center text-slate-500">No agents matched. Try another capability.</div>
+    <div id="loading" class="py-16 text-center text-slate-500">Loading registry…</div>
+  </main>
+
+  <footer class="border-t border-white/5 py-6 text-center text-xs text-slate-500">
+    Live registry · <span class="text-slate-400">registry-ruby.vercel.app</span> · Beacon
+  </footer>
+
+  <script>
+    const API = "https://registry-ruby.vercel.app";
+    const grid = document.getElementById("grid");
+    const loading = document.getElementById("loading");
+    const empty = document.getElementById("empty");
+    const sectionTitle = document.getElementById("sectionTitle");
+    const resetBtn = document.getElementById("resetBtn");
+    const statCount = document.getElementById("statCount");
+
+    const esc = (s) => String(s ?? "").replace(/[&<>"']/g, c => ({ "&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;" }[c]));
+
+    function animateCount(target) {
+      const start = parseInt(statCount.textContent) || 0;
+      const end = Number(target) || 0;
+      const dur = 700, t0 = performance.now();
+      (function step(now) {
+        const p = Math.min(1, (now - t0) / dur);
+        statCount.textContent = Math.round(start + (end - start) * p).toLocaleString();
+        if (p < 1) requestAnimationFrame(step);
+      })(t0);
+    }
+
+    function badge(online) {
+      const color = online ? "bg-emerald-400" : "bg-slate-500";
+      const ring = online ? "shadow-[0_0_10px_2px_rgba(52,211,153,.7)] animate-pulseGlow" : "";
+      const label = online ? "Online" : "Offline";
+      const text = online ? "text-emerald-300" : "text-slate-400";
+      return `<span class="inline-flex items-center gap-1.5 text-[11px] ${text}"><span class="h-2 w-2 rounded-full ${color} ${ring}"></span>${label}</span>`;
+    }
+
+    function card(a, i) {
+      const tags = (a.capabilities_tags || []).slice(0, 6);
+      const host = (() => { try { return new URL(a.mcp_endpoint).host || a.mcp_endpoint; } catch { return a.mcp_endpoint; } })();
+      const rate = Math.round((a.success_rate ?? 0) * 100);
+      return `
+        <article class="card-hover animate-fadeUp rounded-2xl border border-white/10 bg-white/[.04] p-5" style="animation-delay:${i*30}ms">
+          <div class="flex items-start justify-between gap-3">
+            <h4 class="font-semibold text-white leading-tight">${esc(a.name)}</h4>
+            ${badge(a.online)}
+          </div>
+          <a href="${esc(a.mcp_endpoint)}" target="_blank" rel="noopener"
+             class="mt-1 block truncate text-xs text-beacon-300 hover:text-beacon-400">${esc(host)}</a>
+          <div class="mt-3 flex flex-wrap gap-1.5">
+            ${tags.map(t => `<span class="rounded-md bg-beacon-500/10 px-2 py-0.5 text-[11px] text-beacon-300 ring-1 ring-inset ring-beacon-500/20">${esc(t)}</span>`).join("")}
+          </div>
+          <div class="mt-4 flex items-center justify-between border-t border-white/5 pt-3">
+            <div class="flex items-center gap-2">
+              <div class="h-1.5 w-16 overflow-hidden rounded-full bg-white/10">
+                <div class="h-full rounded-full bg-gradient-to-r from-emerald-400 to-beacon-400" style="width:${rate}%"></div>
+              </div>
+              <span class="text-[11px] text-slate-400 tabular-nums">${rate}% rep</span>
+            </div>
+            <span class="text-[11px] text-slate-500 tabular-nums">${(a.total_transactions ?? 0).toLocaleString()} jobs</span>
+          </div>
+        </article>`;
+    }
+
+    function render(list) {
+      loading.classList.add("hidden");
+      grid.innerHTML = list.map(card).join("");
+      empty.classList.toggle("hidden", list.length > 0);
+    }
+
+    async function loadLeaderboard() {
+      sectionTitle.textContent = "Top verified agents";
+      resetBtn.classList.add("hidden");
+      loading.classList.remove("hidden");
+      try {
+        const r = await fetch(`${API}/api/v1/leaderboard?limit=48`);
+        const d = await r.json();
+        animateCount(d.total_count);
+        render(d.leaderboard || []);
+      } catch {
+        loading.textContent = "Could not reach the registry.";
+      }
+    }
+
+    async function search(q) {
+      if (!q.trim()) return loadLeaderboard();
+      sectionTitle.textContent = `Results for “${q}”`;
+      resetBtn.classList.remove("hidden");
+      loading.classList.remove("hidden");
+      grid.innerHTML = ""; empty.classList.add("hidden");
+      try {
+        const r = await fetch(`${API}/api/v1/discover`, {
+          method: "POST", headers: { "content-type": "application/json" },
+          body: JSON.stringify({ query: q, limit: 48 }),
+        });
+        const d = await r.json();
+        render(d.results || []);
+      } catch {
+        loading.textContent = "Search failed. Try again.";
+      }
+    }
+
+    document.getElementById("searchForm").addEventListener("submit", (e) => {
+      e.preventDefault();
+      search(document.getElementById("searchInput").value);
+    });
+    resetBtn.addEventListener("click", () => { document.getElementById("searchInput").value = ""; loadLeaderboard(); });
+
+    // Suggestion chips
+    const chips = ["mcp server", "crypto trading", "pdf extraction", "web scraping", "multi-agent", "langchain"];
+    document.getElementById("chips").innerHTML = chips.map(c =>
+      `<button class="rounded-full border border-white/10 bg-white/5 px-3 py-1 text-slate-300 transition hover:border-beacon-400/50 hover:text-white">${c}</button>`
+    ).join("");
+    document.getElementById("chips").addEventListener("click", (e) => {
+      if (e.target.tagName === "BUTTON") { document.getElementById("searchInput").value = e.target.textContent; search(e.target.textContent); }
+    });
+
+    loadLeaderboard();
+  </script>
+</body>
+</html>

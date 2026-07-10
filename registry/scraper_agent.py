@@ -38,7 +38,8 @@ import requests
 REGISTRY_URL = os.environ.get("REGISTRY_URL", "https://registry-ruby.vercel.app").rstrip("/")
 REGISTER_ENDPOINT = f"{REGISTRY_URL}/api/v1/register"
 GITHUB_TOKEN = os.environ.get("GITHUB_TOKEN", "").strip()
-MAX_PER_QUERY = int(os.environ.get("MAX_PER_QUERY", "60"))
+MAX_PER_QUERY = int(os.environ.get("MAX_PER_QUERY", "300"))
+MAX_PAGES = int(os.environ.get("MAX_PAGES", "3"))  # parse up to page=3 per query
 THROTTLE_SECS = float(os.environ.get("THROTTLE_SECS", "2"))
 GITHUB_SEARCH_URL = "https://api.github.com/search/repositories"
 PER_PAGE = 100
@@ -60,6 +61,22 @@ SEARCH_QUERIES: list[str] = [
     "langchain agent",
     "topic:autogen",
     "autogen agent",
+    # --- expanded horizon: 15 heavy-traffic ecosystem keywords ---
+    "langgraph",
+    "llamaindex-agent",
+    "openagents",
+    "babyagi",
+    "swarm-agent",
+    "ai-agent-framework",
+    "crypto-bot",
+    "solana-agent",
+    "web-scraper-agent",
+    "mcp-tool",
+    "topic:autonomous-agent",
+    "topic:rag-agent",
+    "trading-bot agent",
+    "topic:ai-assistant",
+    "topic:llm-agent",
 ]
 
 STOPWORDS = {
@@ -82,7 +99,20 @@ QUERY_FALLBACK_TAGS: list[tuple[str, list[str]]] = [
     ("mcp", ["mcp", "model-context-protocol", "tools", "ai-agent"]),
     ("model-context", ["mcp", "model-context-protocol", "tools", "ai-agent"]),
     ("langchain", ["langchain", "ai-agent", "llm", "chains"]),
+    ("langgraph", ["langgraph", "ai-agent", "graph", "stateful-agent"]),
+    ("llamaindex", ["llamaindex", "rag", "ai-agent", "retrieval"]),
     ("autogen", ["autogen", "ai-agent", "multi-agent", "llm"]),
+    ("babyagi", ["babyagi", "autonomous-agent", "task-agent", "ai-agent"]),
+    ("swarm", ["swarm", "multi-agent", "orchestration", "ai-agent"]),
+    ("openagents", ["openagents", "ai-agent", "platform", "llm"]),
+    ("solana", ["solana", "crypto", "onchain-agent", "web3"]),
+    ("crypto-bot", ["crypto", "trading-bot", "automation", "web3"]),
+    ("trading-bot", ["trading-bot", "crypto", "automation", "finance"]),
+    ("web-scraper", ["web-scraper", "scraping", "data-extraction", "automation"]),
+    ("mcp-tool", ["mcp", "model-context-protocol", "tools", "ai-agent"]),
+    ("rag", ["rag", "retrieval", "ai-agent", "llm"]),
+    ("ai-assistant", ["ai-assistant", "ai-agent", "llm", "chatbot"]),
+    ("autonomous", ["autonomous-agent", "ai-agent", "automation", "llm"]),
 ]
 DEFAULT_FALLBACK = ["ai-agent", "automation", "llm", "integration"]
 
@@ -137,7 +167,7 @@ def search_repositories(session: requests.Session, query: str) -> Iterable[dict]
     """Yield repo dicts for a query, paginating and isolating per-request failures."""
     harvested = 0
     page = 1
-    while harvested < MAX_PER_QUERY:
+    while harvested < MAX_PER_QUERY and page <= MAX_PAGES:
         params = {
             "q": query,
             "sort": "stars",
