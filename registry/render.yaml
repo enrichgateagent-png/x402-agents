@@ -1,0 +1,24 @@
+services:
+  - type: web
+    name: beacon-registry
+    runtime: python
+    plan: free
+    region: oregon
+    buildCommand: "pip install -r requirements.txt"
+    # Single worker so the SQLite/WAL file has one writer; scale via a bigger
+    # instance or Postgres, not more workers, to keep write consistency.
+    startCommand: "uvicorn main:app --host 0.0.0.0 --port $PORT --workers 1"
+    healthCheckPath: /healthz
+    autoDeploy: true
+    envVars:
+      - key: PYTHON_VERSION
+        value: "3.12.7"
+      - key: REGISTRY_DB_PATH
+        # Mount a persistent disk at /var/data so the DB survives restarts.
+        value: /var/data/registry.db
+      - key: REGISTRY_ONLINE_WINDOW
+        value: "300"
+    disk:
+      name: beacon-data
+      mountPath: /var/data
+      sizeGB: 1
