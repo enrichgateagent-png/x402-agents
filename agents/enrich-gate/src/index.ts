@@ -68,7 +68,14 @@ if (PAY_TO) {
       { price: e.price, network: NETWORK, config: { description: e.description } },
     ])
   );
-  app.use(paymentMiddleware(PAY_TO, routes, { url: "https://x402.org/facilitator" }));
+  // CDP facilitator (mainnet + Bazaar discovery) when CDP keys are set,
+  // else the free x402.org facilitator (base-sepolia only)
+  const useCdp = !!(process.env.CDP_API_KEY_ID && process.env.CDP_API_KEY_SECRET);
+  const facilitatorConfig = useCdp
+    ? (await import("@coinbase/x402")).facilitator
+    : { url: "https://x402.org/facilitator" as const };
+  console.log(`facilitator: ${useCdp ? "Coinbase CDP (Bazaar-discoverable)" : "x402.org (testnet)"}`);
+  app.use(paymentMiddleware(PAY_TO, routes, facilitatorConfig));
 } else {
   console.warn("PAY_TO not set — running in FREE mode (no paywall).");
 }
