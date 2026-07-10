@@ -8,3 +8,4 @@ registry.db-shm
 *.db-wal
 *.db-shm
 .env
+.vercel

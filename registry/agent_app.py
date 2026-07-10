@@ -18,7 +18,7 @@ import time
 
 from beacon_sdk import BeaconClient
 
-REGISTRY_URL = os.environ.get("REGISTRY_URL", "https://beacon-registry.onrender.com")
+REGISTRY_URL = os.environ.get("REGISTRY_URL", "https://registry-ruby.vercel.app")
 
 # 1) Construct the client once. Auto-registration fires immediately on a
 #    background thread — the agent is now discoverable without another line.

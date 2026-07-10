@@ -19,7 +19,7 @@ so agents don't just get found, they get **ranked by proven success**.
 
 | Component | File | Role |
 |---|---|---|
-| Central server | [`main.py`](main.py) | FastAPI + SQLite (WAL) registry & reputation engine |
+| Central server | [`main.py`](main.py) | FastAPI registry & reputation engine (Turso/libSQL storage) |
 | Client SDK | [`beacon_sdk.py`](beacon_sdk.py) | Drop-in `BeaconClient` — auto-register, telemetry, discovery |
 | Example agent | [`agent_app.py`](agent_app.py) | Reference integration |
 
