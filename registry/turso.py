@@ -125,6 +125,9 @@ def ensure_schema() -> None:
         "ALTER TABLE agents ADD COLUMN reachable INTEGER NOT NULL DEFAULT 1",
         "ALTER TABLE agents ADD COLUMN last_validated TEXT",
         "ALTER TABLE agents ADD COLUMN registration_source TEXT NOT NULL DEFAULT 'sdk'",
+        "ALTER TABLE agents ADD COLUMN fraud_strikes INTEGER NOT NULL DEFAULT 0",
+        "ALTER TABLE agents ADD COLUMN is_fraudulent INTEGER NOT NULL DEFAULT 0",
+        "ALTER TABLE agents ADD COLUMN fraud_reason TEXT",
     ):
         try:
             execute(ddl)

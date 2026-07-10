@@ -15,6 +15,7 @@ from __future__ import annotations
 import os
 import re
 from datetime import datetime, timezone
+from typing import Optional
 
 import requests
 from fastapi import BackgroundTasks, FastAPI, HTTPException, Request
@@ -84,6 +85,11 @@ def _row_to_public(row: dict) -> dict:
         "last_validated": row.get("last_validated"),
         "registration_source": row.get("registration_source", "sdk"),
         "online": online,
+        "fraud_status": {
+            "is_flagged": bool(int(row.get("is_fraudulent", 0) or 0)),
+            "strikes": int(row.get("fraud_strikes", 0) or 0),
+            "reason": row.get("fraud_reason"),
+        },
     }
 
 
@@ -178,6 +184,8 @@ class TelemetryRequest(BaseModel):
         validation_alias=AliasChoices("status", "job_status"),
     )
 
+    reason: Optional[str] = Field(None, max_length=500)
+
     model_config = {"populate_by_name": True}
 
     @field_validator("status")
@@ -188,7 +196,9 @@ class TelemetryRequest(BaseModel):
             return "success"
         if v in {"fail", "failed", "failure", "error", "false", "0"}:
             return "fail"
-        raise ValueError("status must indicate success or failure")
+        if v in {"fraud", "fraudulent", "malicious", "abuse", "spam"}:
+            return "fraud"
+        raise ValueError("status must be success, fail, or fraud")
 
 
 # --------------------------------------------------------------------------- #
@@ -321,6 +331,9 @@ def _score_rows(
     """Score every agent against a token set. Returns {agent_id: (score, public)}."""
     out: dict[str, tuple[int, dict]] = {}
     for row in rows:
+        # Defense: fraudulent nodes are never surfaced through discovery.
+        if int(row.get("is_fraudulent", 0) or 0):
+            continue
         pub = _row_to_public(row)
         if online_only and not pub["online"]:
             continue
@@ -415,24 +428,63 @@ def telemetry(req: TelemetryRequest) -> dict:
         raise HTTPException(status_code=404, detail="agent_id not registered")
 
     now = _utcnow().isoformat()
-    is_success = 1 if req.status == "success" else 0
+    s = 1 if req.status == "success" else 0            # successful_transactions delta
+    f = 1 if req.status == "fraud" else 0              # fraud_strikes delta
+    t = 1                                              # every event counts as a transaction
+    reason = req.reason.strip() if req.reason else None
 
-    # Single atomic statement: increment counters and recompute the ratio from
-    # the pre-increment values so the math is exact under concurrency.
+    # One atomic statement handles counters, auto-flagging at >=3 strikes, and the
+    # penalized success_rate. All CASE expressions read pre-increment column values,
+    # so the (fraud_strikes + f) lookahead computes the post-event strike count.
+    #   success_rate = successful / (total + fraud_strikes*2)
+    # Fraud strikes weigh 2x a plain failure in the denominator — a heavier penalty.
     turso.execute(
         """
         UPDATE agents
-           SET total_transactions = total_transactions + 1,
-               successful_transactions = successful_transactions + ?,
+           SET successful_transactions = successful_transactions + ?,
+               total_transactions      = total_transactions + ?,
+               fraud_strikes           = fraud_strikes + ?,
+               is_fraudulent = CASE WHEN (fraud_strikes + ?) >= 3 THEN 1 ELSE is_fraudulent END,
+               fraud_reason  = CASE WHEN (fraud_strikes + ?) >= 3
+                                    THEN COALESCE(?, fraud_reason, 'auto-flagged: 3+ fraud strikes')
+                                    ELSE fraud_reason END,
                success_rate = CAST(successful_transactions + ? AS REAL)
-                              / (total_transactions + 1),
+                              / (total_transactions + ? + (fraud_strikes + ?) * 2),
                last_seen = ?
          WHERE agent_id = ?
         """,
-        [is_success, is_success, now, req.agent_id],
+        [s, t, f, f, f, reason, s, t, f, now, req.agent_id],
     )
     row = turso.execute("SELECT * FROM agents WHERE agent_id = ?", [req.agent_id])[0]
     return {"ok": True, "recorded": req.status, "agent": _row_to_public(row)}
+
+
+@app.get("/api/v1/radar")
+def radar(limit: int = 100) -> dict:
+    """
+    Organic-adoption radar: the newest agents that registered via the SDK /
+    auto-inject / Eliza plugins (registration_source = 'sdk'), newest first.
+    Lets us watch outside developers hit the platform in real time.
+    """
+    _ensure_ready()
+    limit = max(1, min(limit, 500))
+    rows = turso.execute(
+        "SELECT agent_id, name, mcp_endpoint, capabilities_tags, created_at "
+        "FROM agents WHERE registration_source = 'sdk' "
+        "ORDER BY created_at DESC LIMIT ?",
+        [limit],
+    )
+    agents = [
+        {
+            "agent_id": r["agent_id"],
+            "name": r["name"],
+            "mcp_endpoint": r["mcp_endpoint"],
+            "capabilities_tags": [t for t in (r["capabilities_tags"] or "").split(",") if t],
+            "created_at": r["created_at"],
+        }
+        for r in rows
+    ]
+    return {"ok": True, "count": len(agents), "agents": agents}
 
 
 @app.post("/api/v1/validate")
@@ -482,13 +534,26 @@ def leaderboard(limit: int = 50, online_only: bool = False) -> dict:
         "by_source": by_source,
     }
 
+    # Defense: flagged agents are drastically demoted (is_fraudulent ASC sinks
+    # them to the bottom) but still returned so the portal can render a red
+    # "FRAUD WARNING" badge via each row's fraud_status.
     rows = turso.execute(
-        "SELECT * FROM agents ORDER BY success_rate DESC, total_transactions DESC LIMIT ?",
+        "SELECT * FROM agents "
+        "ORDER BY is_fraudulent ASC, success_rate DESC, total_transactions DESC LIMIT ?",
         [limit],
     )
     board = [_row_to_public(r) for r in rows]
     if online_only:
         board = [a for a in board if a["online"]]
+
+    # Flagged agents are demoted out of the main board at scale, so surface them
+    # in a dedicated array — the portal renders these as red "FRAUD WARNING"
+    # cards regardless of their rank.
+    flagged_rows = turso.execute(
+        "SELECT * FROM agents WHERE is_fraudulent = 1 ORDER BY fraud_strikes DESC LIMIT 100"
+    )
+    flagged = [_row_to_public(r) for r in flagged_rows]
+
     # Split-metrics promoted to top level per the analytics contract; `summary`
     # retained for the richer by_source breakdown.
     return {
@@ -496,8 +561,10 @@ def leaderboard(limit: int = 50, online_only: bool = False) -> dict:
         "total_count": total_count,
         "organic_sdk_registrations": by_source.get("sdk", 0),
         "scraped_registrations": by_source.get("scraper", 0),
+        "flagged_count": len(flagged),
         "summary": summary,
         "leaderboard": board,
+        "flagged_agents": flagged,
     }
 
 
