@@ -1,7 +1,11 @@
 import { serve } from "@hono/node-server";
 import { Hono } from "hono";
 import { paymentMiddleware, type Network, type RoutesConfig } from "x402-hono";
-import { serperSearch, exaSearch, firecrawlScrape } from "./providers.js";
+import { serperSearch, exaSearch, firecrawlScrape, workersAi } from "./providers.js";
+
+try {
+  process.loadEnvFile(new URL("../.env", import.meta.url).pathname);
+} catch {}
 
 const PORT = Number(process.env.PORT ?? 4022);
 const PAY_TO = process.env.PAY_TO as `0x${string}` | undefined;
@@ -11,6 +15,8 @@ const KEYS = {
   serper: process.env.SERPER_API_KEY,
   exa: process.env.EXA_API_KEY,
   firecrawl: process.env.FIRECRAWL_API_KEY,
+  cfAccount: process.env.CF_ACCOUNT_ID,
+  cfToken: process.env.CF_API_TOKEN,
 };
 
 // route → price + description; only key-enabled routes are mounted and paywalled
@@ -32,6 +38,12 @@ const CATALOG = [
     price: "$0.015",
     enabled: !!KEYS.firecrawl,
     description: "Scrape any URL to clean markdown (Firecrawl-backed). POST { url } → { url, title, markdown }.",
+  },
+  {
+    path: "/ai",
+    price: "$0.005",
+    enabled: !!(KEYS.cfAccount && KEYS.cfToken),
+    description: "LLM inference (Llama-3-8B via Cloudflare Workers AI). POST { prompt, system? } → { response, model }.",
   },
 ] as const;
 
@@ -84,6 +96,13 @@ app.post("/scrape", async (c) => {
     return c.json({ error: "Body must be { url: string } with http(s) URL" }, 400);
   }
   return c.json(await firecrawlScrape(requireKey(KEYS.firecrawl, "scrape"), url));
+});
+
+app.post("/ai", async (c) => {
+  const { prompt, system } = await c.req.json().catch(() => ({}));
+  if (!prompt || typeof prompt !== "string") return c.json({ error: "Body must be { prompt: string, system?: string }" }, 400);
+  requireKey(KEYS.cfToken, "ai");
+  return c.json(await workersAi(KEYS.cfAccount!, KEYS.cfToken!, prompt, system));
 });
 
 app.onError((err, c) => {

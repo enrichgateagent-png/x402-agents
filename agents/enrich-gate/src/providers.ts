@@ -44,6 +44,28 @@ export async function exaSearch(apiKey: string, query: string, num = 10): Promis
   return { results };
 }
 
+// Cloudflare Workers AI — LLM inference (llama-3-8b)
+export async function workersAi(
+  accountId: string,
+  apiToken: string,
+  prompt: string,
+  system?: string
+): Promise<{ response: string; model: string }> {
+  const model = "@cf/meta/llama-3-8b-instruct";
+  const messages = [
+    ...(system ? [{ role: "system", content: system }] : []),
+    { role: "user", content: prompt },
+  ];
+  const data: any = await post(
+    `https://api.cloudflare.com/client/v4/accounts/${accountId}/ai/run/${model}`,
+    { authorization: `Bearer ${apiToken}` },
+    { messages },
+    30000
+  );
+  if (!data.success) throw new Error(data.errors?.[0]?.message ?? "Workers AI call failed");
+  return { response: data.result?.response ?? "", model };
+}
+
 // Firecrawl — URL → clean markdown
 export async function firecrawlScrape(apiKey: string, url: string): Promise<{ url: string; markdown: string; title?: string }> {
   const data: any = await post(

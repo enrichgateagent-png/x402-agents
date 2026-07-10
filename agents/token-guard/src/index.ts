@@ -3,6 +3,10 @@ import { Hono } from "hono";
 import { paymentMiddleware, type Network } from "x402-hono";
 import { buildReport, SUPPORTED_CHAINS } from "./score.js";
 
+try {
+  process.loadEnvFile(new URL("../.env", import.meta.url).pathname);
+} catch {}
+
 const PORT = Number(process.env.PORT ?? 4021);
 const PAY_TO = process.env.PAY_TO as `0x${string}` | undefined;
 const NETWORK = (process.env.NETWORK ?? "base-sepolia") as Network;
