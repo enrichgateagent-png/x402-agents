@@ -34,12 +34,12 @@ export async function exaSearch(apiKey: string, query: string, num = 10): Promis
   const data: any = await post(
     "https://api.exa.ai/search",
     { "x-api-key": apiKey },
-    { query, numResults: num, contents: { text: { maxCharacters: 500 } } }
+    { query, type: "auto", numResults: num, contents: { highlights: true } }
   );
   const results: SearchResult[] = (data.results ?? []).map((r: any) => ({
     title: r.title,
     url: r.url,
-    snippet: r.text,
+    snippet: (Array.isArray(r.highlights) ? r.highlights.join(" … ") : r.text ?? "").slice(0, 500),
   }));
   return { results };
 }
