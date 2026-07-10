@@ -1,0 +1,22 @@
+{
+  "name": "@x402-agents/token-guard",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "Token safety / rug-check scoring API, paid per call via x402",
+  "scripts": {
+    "dev": "tsx watch src/index.ts",
+    "start": "tsx src/index.ts",
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "@hono/node-server": "^1.14.0",
+    "hono": "^4.7.0",
+    "x402-hono": "^1.2.0"
+  },
+  "devDependencies": {
+    "@types/node": "^26.1.1",
+    "tsx": "^4.19.0",
+    "typescript": "^5.8.0"
+  }
+}
