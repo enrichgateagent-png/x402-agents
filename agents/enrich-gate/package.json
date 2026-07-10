@@ -1,0 +1,22 @@
+{
+  "name": "@x402-agents/enrich-gate",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "Pay-per-request gateway to web search, scraping, and enrichment APIs — the StableEnrich model",
+  "scripts": {
+    "dev": "tsx watch src/index.ts",
+    "start": "tsx src/index.ts",
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "@hono/node-server": "^1.14.0",
+    "hono": "^4.7.0",
+    "x402-hono": "^1.2.0"
+  },
+  "devDependencies": {
+    "@types/node": "^26.1.1",
+    "tsx": "^4.19.0",
+    "typescript": "^5.8.0"
+  }
+}

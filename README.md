@@ -12,7 +12,16 @@ Target: each agent earning $200–300/mo is a win; portfolio of 20–50 compound
 Categories ranked by proven x402 demand (x402scan leaderboard, July 2026:
 data-for-agents and DeFi intelligence dominate; LLM gateways are saturated).
 
-### Wave 1 — zero input cost, pure margin (build first)
+### Wave 0 — proven killer use cases (clone the leaderboard winners)
+| # | Agent | Clones | Model | Status |
+|---|-------|--------|-------|--------|
+| 0 | **enrich-gate** | StableEnrich (#1, $3.1K/mo, 108K txns) | Resell gated APIs (Serper/Exa/Firecrawl) per-call with markup. Buyer pays for *access without subscription* | Built — needs provider keys |
+
+Unit economics: search costs ~$0.001 upstream (Serper), sells at $0.01 → 10x.
+Scrape ~$0.003 upstream (Firecrawl), sells at $0.015 → 5x. At StableEnrich's
+volume (108K calls/mo) that's ~$1K/mo gross per gateway.
+
+### Wave 1 — zero input cost, pure margin
 | # | Agent | What it sells | Price | Upstream (free) |
 |---|-------|--------------|-------|-----------------|
 | 1 | **token-guard** | Token safety / rug-check score | $0.005/call | GoPlus, DexScreener, Honeypot.is |
