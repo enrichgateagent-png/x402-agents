@@ -71,9 +71,9 @@ if (PAY_TO) {
   // CDP facilitator (mainnet + Bazaar discovery) when CDP keys are set,
   // else the free x402.org facilitator (base-sepolia only)
   const useCdp = !!(process.env.CDP_API_KEY_ID && process.env.CDP_API_KEY_SECRET);
-  const facilitatorConfig = useCdp
+  const facilitatorConfig = (useCdp
     ? (await import("@coinbase/x402")).facilitator
-    : { url: "https://x402.org/facilitator" as const };
+    : { url: "https://x402.org/facilitator" }) as Parameters<typeof paymentMiddleware>[2];
   console.log(`facilitator: ${useCdp ? "Coinbase CDP (Bazaar-discoverable)" : "x402.org (testnet)"}`);
   app.use(paymentMiddleware(PAY_TO, routes, facilitatorConfig));
 } else {
