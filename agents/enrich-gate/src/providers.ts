@@ -51,7 +51,7 @@ export async function workersAi(
   prompt: string,
   system?: string
 ): Promise<{ response: string; model: string }> {
-  const model = "@cf/meta/llama-3-8b-instruct";
+  const model = process.env.CF_AI_MODEL ?? "@cf/meta/llama-3.1-8b-instruct-fp8";
   const messages = [
     ...(system ? [{ role: "system", content: system }] : []),
     { role: "user", content: prompt },
