@@ -63,6 +63,17 @@ npm run dev
 ```
 Without `PAY_TO` set, the agent runs in free mode (no paywall) for local testing.
 
+## Automated distribution
+Discovery in this ecosystem is mostly automatic — the only push needed is one-time:
+- **Bazaar / agentic.market / Onyx Bazaar**: auto-indexed once you take payments
+  through the CDP facilitator with `discoverable: true` (already in route configs)
+- **x402scan**: indexes onchain payments automatically
+- **MCP wrapper** (`mcp/enrich-gate-mcp`): npm-publishable stdio server exposing
+  `web_search` / `neural_search` / `scrape_url`. Any agent user adds it to their
+  MCP config with a funded wallet key and pays us per call via x402-fetch.
+  This is distribution-as-code — publish once, every install is a paying client.
+- One-time manual: PR to awesome-x402 lists, launch post on X
+
 ## Distribution checklist (per agent)
 1. Mainnet via CDP facilitator with `discoverable: true` → auto-listed in x402 Bazaar
 2. Clear input/output schemas in route config (this is your SEO for agent buyers)
