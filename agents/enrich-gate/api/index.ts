@@ -1,4 +1,4 @@
-import { handle } from "hono/vercel";
 import { app } from "../src/app.js";
 
-export default handle(app);
+// Vercel's Node runtime accepts a fetch-style server (Hono app) as default export
+export default app;

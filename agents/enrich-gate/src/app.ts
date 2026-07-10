@@ -115,3 +115,6 @@ app.onError((err, c) => {
   const status = (err as any).status ?? 502;
   return c.json({ error: err.message }, status);
 });
+
+// Vercel treats src/app.ts as a server entrypoint and requires a default export
+export default app;
