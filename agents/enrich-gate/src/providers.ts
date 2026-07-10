@@ -69,7 +69,7 @@ export async function workersAi(
 // Firecrawl — URL → clean markdown
 export async function firecrawlScrape(apiKey: string, url: string): Promise<{ url: string; markdown: string; title?: string }> {
   const data: any = await post(
-    "https://api.firecrawl.dev/v1/scrape",
+    "https://api.firecrawl.dev/v2/scrape",
     { authorization: `Bearer ${apiKey}` },
     { url, formats: ["markdown"] }
   );
