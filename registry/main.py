@@ -243,6 +243,24 @@ def telemetry(req: TelemetryRequest) -> dict:
     return {"ok": True, "recorded": req.job_status, "agent": _row_to_public(row[0])}
 
 
+@app.get("/api/v1/leaderboard")
+def leaderboard(limit: int = 50) -> dict:
+    """
+    Public leaderboard: top agents ranked by reputation (success_rate DESC, then
+    volume). Returns a flat JSON array plus a top-level total_count of every
+    registered agent.
+    """
+    _ensure_ready()
+    limit = max(1, min(limit, 500))
+    total = turso.execute("SELECT COUNT(*) AS c FROM agents")
+    total_count = int(total[0]["c"]) if total else 0
+    rows = turso.execute(
+        "SELECT * FROM agents ORDER BY success_rate DESC, total_transactions DESC LIMIT ?",
+        [limit],
+    )
+    return {"ok": True, "total_count": total_count, "leaderboard": [_row_to_public(r) for r in rows]}
+
+
 @app.get("/api/v1/agents")
 def list_agents(limit: int = 100, online_only: bool = False) -> dict:
     _ensure_ready()
