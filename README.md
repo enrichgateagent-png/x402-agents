@@ -80,3 +80,5 @@ Discovery in this ecosystem is mostly automatic — the only push needed is one-
 3. Register on agentic.market / Onyx Bazaar; PR to awesome-x402 lists
 4. Price low initially to climb x402scan leaderboard (visible social proof)
 5. Ship an MCP wrapper so the tool is callable directly from Claude/agent runtimes
+
+- [JMT x402 Agent Tools](https://jmt-x402-proxy.jmthomasofficial.workers.dev) — 25 paid x402 endpoints on Base mainnet: web search, AI analysis, crypto/stock data, SEC filings, company intel, news, sentiment, macro dashboard. $0.001-$0.15/call USDC. Local LLM-powered.
