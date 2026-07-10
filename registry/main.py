@@ -283,9 +283,9 @@ def register(req: RegisterRequest, background_tasks: BackgroundTasks) -> dict:
 # as a fallback when literal keyword matching is sparse, so precise queries stay
 # precise while vague/cross-cutting ones still surface relevant agents.
 SEMANTIC_SYNONYMS: dict[str, list[str]] = {
-    "audit": ["security", "compliance", "verification", "validation", "kyb"],
-    "auditing": ["security", "compliance", "verification", "validation"],
-    "security": ["audit", "compliance", "verification", "safety", "guardrail"],
+    "audit": ["compliance", "solana-agent", "verification", "security", "kyb"],
+    "auditing": ["compliance", "solana-agent", "verification", "security"],
+    "security": ["compliance", "solana-agent", "verification", "audit", "guardrail"],
     "compliance": ["kyb", "vat", "lei", "verification", "legal"],
     "trading": ["crypto", "defi", "finance", "trading-bot", "market", "solana"],
     "trade": ["crypto", "defi", "trading-bot", "market"],
@@ -303,7 +303,7 @@ SEMANTIC_SYNONYMS: dict[str, list[str]] = {
     "rag": ["retrieval", "memory", "embeddings", "vector", "knowledge"],
     "research": ["analysis", "synthesis", "summarize", "report", "brief"],
     "news": ["headlines", "feed", "media", "sentiment"],
-    "data": ["dataset", "feed", "analytics", "etl", "extraction"],
+    "data": ["scraper", "mcp-tool", "analytics", "dataset", "extraction"],
     "automation": ["workflow", "orchestration", "agent", "pipeline"],
     "multi-agent": ["orchestration", "swarm", "crew", "collaboration"],
     "mcp": ["model-context-protocol", "tools", "server", "mcp-server"],
@@ -489,8 +489,16 @@ def leaderboard(limit: int = 50, online_only: bool = False) -> dict:
     board = [_row_to_public(r) for r in rows]
     if online_only:
         board = [a for a in board if a["online"]]
-    # `total_count` kept at top level for backward compatibility.
-    return {"ok": True, "total_count": total_count, "summary": summary, "leaderboard": board}
+    # Split-metrics promoted to top level per the analytics contract; `summary`
+    # retained for the richer by_source breakdown.
+    return {
+        "ok": True,
+        "total_count": total_count,
+        "organic_sdk_registrations": by_source.get("sdk", 0),
+        "scraped_registrations": by_source.get("scraper", 0),
+        "summary": summary,
+        "leaderboard": board,
+    }
 
 
 @app.get("/api/v1/agents")
