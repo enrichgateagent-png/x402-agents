@@ -82,6 +82,7 @@ def _row_to_public(row: dict) -> dict:
         "created_at": row["created_at"],
         "reachable": reachable,
         "last_validated": row.get("last_validated"),
+        "registration_source": row.get("registration_source", "sdk"),
         "online": online,
     }
 
@@ -134,11 +135,16 @@ def validate_agent_endpoint(agent_id: str, endpoint: str) -> bool:
 # Models
 # --------------------------------------------------------------------------- #
 
+_KNOWN_SOURCES = {"sdk", "scraper", "auto-inject", "eliza", "manual"}
+
+
 class RegisterRequest(BaseModel):
     agent_id: str = Field(..., min_length=1, max_length=256)
     name: str = Field(..., min_length=1, max_length=256)
     mcp_endpoint: str = Field(..., min_length=1, max_length=2048)
     capabilities: str = Field("", max_length=4096)
+    # Analytics: distinguish organic SDK/plugin registrations from the scraper.
+    source: str = Field("sdk", max_length=32)
 
     @field_validator("agent_id", "name", "mcp_endpoint")
     @classmethod
@@ -147,6 +153,12 @@ class RegisterRequest(BaseModel):
         if not v:
             raise ValueError("field must not be blank")
         return v
+
+    @field_validator("source")
+    @classmethod
+    def _norm_source(cls, v: str) -> str:
+        v = (v or "sdk").strip().lower()
+        return v if v in _KNOWN_SOURCES else "sdk"
 
 
 class DiscoverRequest(BaseModel):
@@ -244,15 +256,22 @@ def register(req: RegisterRequest, background_tasks: BackgroundTasks) -> dict:
         INSERT INTO agents (
             agent_id, name, mcp_endpoint, capabilities_tags,
             success_rate, total_transactions, successful_transactions,
-            created_at, last_seen
-        ) VALUES (?, ?, ?, ?, 1.0, 0, 0, ?, ?)
+            created_at, last_seen, registration_source
+        ) VALUES (?, ?, ?, ?, 1.0, 0, 0, ?, ?, ?)
         ON CONFLICT(agent_id) DO UPDATE SET
             name = excluded.name,
             mcp_endpoint = excluded.mcp_endpoint,
             capabilities_tags = excluded.capabilities_tags,
-            last_seen = excluded.last_seen
+            last_seen = excluded.last_seen,
+            -- 'sdk' (organic) is sticky: a later scraper pass must not
+            -- overwrite an agent that once registered itself organically.
+            registration_source = CASE
+                WHEN excluded.registration_source = 'sdk' THEN 'sdk'
+                WHEN agents.registration_source = 'sdk' THEN 'sdk'
+                ELSE excluded.registration_source
+            END
         """,
-        [req.agent_id, req.name, req.mcp_endpoint, tags, now, now],
+        [req.agent_id, req.name, req.mcp_endpoint, tags, now, now, req.source],
     )
     row = turso.execute("SELECT * FROM agents WHERE agent_id = ?", [req.agent_id])[0]
     # Fire the endpoint validation after the response is sent.
@@ -260,32 +279,118 @@ def register(req: RegisterRequest, background_tasks: BackgroundTasks) -> dict:
     return {"ok": True, "status": status, "agent": _row_to_public(row)}
 
 
-@app.post("/api/v1/discover")
-def discover(req: DiscoverRequest) -> dict:
-    """Capability search, ranked by tag-match score, then success_rate, then volume."""
-    _ensure_ready()
-    query_tokens = [t for t in _TAG_SPLIT.split(req.query.lower()) if t]
-    rows = turso.execute("SELECT * FROM agents")
+# Lightweight semantic map: each concept -> related capability tokens. Used only
+# as a fallback when literal keyword matching is sparse, so precise queries stay
+# precise while vague/cross-cutting ones still surface relevant agents.
+SEMANTIC_SYNONYMS: dict[str, list[str]] = {
+    "audit": ["security", "compliance", "verification", "validation", "kyb"],
+    "auditing": ["security", "compliance", "verification", "validation"],
+    "security": ["audit", "compliance", "verification", "safety", "guardrail"],
+    "compliance": ["kyb", "vat", "lei", "verification", "legal"],
+    "trading": ["crypto", "defi", "finance", "trading-bot", "market", "solana"],
+    "trade": ["crypto", "defi", "trading-bot", "market"],
+    "crypto": ["defi", "web3", "solana", "onchain", "wallet", "trading"],
+    "payment": ["x402", "usdc", "wallet", "crypto", "billing"],
+    "scrape": ["scraping", "crawler", "web-scraper", "extraction", "data"],
+    "scraping": ["crawler", "web-scraper", "extraction", "harvest"],
+    "search": ["retrieval", "discovery", "web-search", "neural-search", "index"],
+    "pdf": ["document", "extraction", "ocr", "structured-json", "invoice"],
+    "document": ["pdf", "ocr", "extraction", "parsing"],
+    "chat": ["conversation", "assistant", "chatbot", "llm"],
+    "voice": ["speech", "audio", "tts", "stt"],
+    "image": ["vision", "multimodal", "generation", "diffusion"],
+    "memory": ["rag", "retrieval", "storage", "long-term-memory", "embeddings"],
+    "rag": ["retrieval", "memory", "embeddings", "vector", "knowledge"],
+    "research": ["analysis", "synthesis", "summarize", "report", "brief"],
+    "news": ["headlines", "feed", "media", "sentiment"],
+    "data": ["dataset", "feed", "analytics", "etl", "extraction"],
+    "automation": ["workflow", "orchestration", "agent", "pipeline"],
+    "multi-agent": ["orchestration", "swarm", "crew", "collaboration"],
+    "mcp": ["model-context-protocol", "tools", "server", "mcp-server"],
+    "monitor": ["observability", "telemetry", "analytics", "tracking"],
+}
 
-    scored: list[tuple[int, float, int, dict]] = []
+
+def _score_rows(
+    rows: list[dict],
+    tokens: list[str],
+    online_only: bool,
+    w_exact: int,
+    w_sub: int,
+) -> dict[str, tuple[int, dict]]:
+    """Score every agent against a token set. Returns {agent_id: (score, public)}."""
+    out: dict[str, tuple[int, dict]] = {}
     for row in rows:
         pub = _row_to_public(row)
-        if req.online_only and not pub["online"]:
+        if online_only and not pub["online"]:
             continue
         tags = set(pub["capabilities_tags"])
         haystack = (row["name"] + " " + (row["capabilities_tags"] or "")).lower()
         score = 0
-        for tok in query_tokens:
+        for tok in tokens:
             if tok in tags:
-                score += 2
+                score += w_exact
             elif tok in haystack:
-                score += 1
+                score += w_sub
         if score > 0:
-            scored.append((score, pub["success_rate"], pub["total_transactions"], pub))
+            out[pub["agent_id"]] = (score, pub)
+    return out
 
-    scored.sort(key=lambda x: (x[0], x[1], x[2]), reverse=True)
-    results = [item[3] for item in scored[: req.limit]]
-    return {"ok": True, "count": len(results), "query": req.query, "results": results}
+
+def _expand_tokens(tokens: list[str]) -> list[str]:
+    expanded: list[str] = []
+    for tok in tokens:
+        for syn in SEMANTIC_SYNONYMS.get(tok, []):
+            if syn not in expanded and syn not in tokens:
+                expanded.append(syn)
+    return expanded
+
+
+@app.post("/api/v1/discover")
+def discover(req: DiscoverRequest) -> dict:
+    """
+    Capability search ranked by match score, then success_rate, then volume.
+
+    Two-stage: literal keyword scoring first. If that yields few results, expand
+    the query through a semantic synonym map and re-score with a lower weight, so
+    cross-cutting matches surface even when word-for-word matching is zero —
+    without diluting precise queries that already match well.
+    """
+    _ensure_ready()
+    query_tokens = [t for t in _TAG_SPLIT.split(req.query.lower()) if t]
+    rows = turso.execute("SELECT * FROM agents")
+
+    # Stage 1 — literal match (exact tag = 2, substring = 1).
+    combined = _score_rows(rows, query_tokens, req.online_only, 2, 1)
+
+    # Stage 2 — semantic fallback when literal results are sparse.
+    semantic_expanded = False
+    SEMANTIC_MIN = 3
+    if len(combined) < SEMANTIC_MIN:
+        expanded = _expand_tokens(query_tokens)
+        if expanded:
+            semantic_expanded = True
+            for agent_id, (score, pub) in _score_rows(rows, expanded, req.online_only, 1, 1).items():
+                if agent_id in combined:
+                    # keep the stronger (literal) score if already matched
+                    if score > combined[agent_id][0]:
+                        combined[agent_id] = (score, pub)
+                else:
+                    combined[agent_id] = (score, pub)
+
+    scored = sorted(
+        combined.values(),
+        key=lambda x: (x[0], x[1]["success_rate"], x[1]["total_transactions"]),
+        reverse=True,
+    )
+    results = [pub for _, pub in scored[: req.limit]]
+    return {
+        "ok": True,
+        "count": len(results),
+        "query": req.query,
+        "semantic_expanded": semantic_expanded,
+        "results": results,
+    }
 
 
 @app.post("/api/v1/telemetry")
@@ -363,8 +468,20 @@ def leaderboard(limit: int = 50, online_only: bool = False) -> dict:
     """
     _ensure_ready()
     limit = max(1, min(limit, 500))
-    total = turso.execute("SELECT COUNT(*) AS c FROM agents")
-    total_count = int(total[0]["c"]) if total else 0
+
+    # Split-metrics summary: total + organic (sdk) vs scraped registrations.
+    src_rows = turso.execute(
+        "SELECT registration_source AS s, COUNT(*) AS c FROM agents GROUP BY registration_source"
+    )
+    by_source = {r["s"] or "sdk": int(r["c"]) for r in src_rows}
+    total_count = sum(by_source.values())
+    summary = {
+        "total_agents": total_count,
+        "organic_sdk_registrations": by_source.get("sdk", 0),
+        "scraped_registrations": by_source.get("scraper", 0),
+        "by_source": by_source,
+    }
+
     rows = turso.execute(
         "SELECT * FROM agents ORDER BY success_rate DESC, total_transactions DESC LIMIT ?",
         [limit],
@@ -372,7 +489,8 @@ def leaderboard(limit: int = 50, online_only: bool = False) -> dict:
     board = [_row_to_public(r) for r in rows]
     if online_only:
         board = [a for a in board if a["online"]]
-    return {"ok": True, "total_count": total_count, "leaderboard": board}
+    # `total_count` kept at top level for backward compatibility.
+    return {"ok": True, "total_count": total_count, "summary": summary, "leaderboard": board}
 
 
 @app.get("/api/v1/agents")

@@ -124,6 +124,7 @@ def ensure_schema() -> None:
     for ddl in (
         "ALTER TABLE agents ADD COLUMN reachable INTEGER NOT NULL DEFAULT 1",
         "ALTER TABLE agents ADD COLUMN last_validated TEXT",
+        "ALTER TABLE agents ADD COLUMN registration_source TEXT NOT NULL DEFAULT 'sdk'",
     ):
         try:
             execute(ddl)

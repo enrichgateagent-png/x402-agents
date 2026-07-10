@@ -298,6 +298,7 @@ def register_agent(session: requests.Session, repo: dict) -> bool:
         "mcp_endpoint": html_url,
         "capabilities": tags,        # field the server reads
         "capabilities_tags": tags,   # documented alias, ignored if unused
+        "source": "scraper",         # analytics: mark harvested vs organic SDK
     }
 
     try:
