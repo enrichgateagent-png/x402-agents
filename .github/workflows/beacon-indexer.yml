@@ -1,0 +1,37 @@
+name: Beacon Indexer
+
+# Zero-cost continuous harvesting on GitHub's free Actions runners.
+on:
+  schedule:
+    - cron: "0 */6 * * *"   # every 6 hours (UTC)
+  workflow_dispatch: {}       # allow manual runs from the Actions tab
+
+concurrency:
+  group: beacon-indexer
+  cancel-in-progress: false
+
+jobs:
+  harvest:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install deps
+        working-directory: registry
+        run: pip install -r scraper_requirements.txt
+
+      - name: Run indexer
+        working-directory: registry
+        env:
+          # The workflow's built-in token lifts GitHub API limits to 5000/hr.
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          # Override if your registry URL changes; secret takes precedence.
+          REGISTRY_URL: ${{ secrets.REGISTRY_URL || 'https://registry-ruby.vercel.app' }}
+          MAX_PER_QUERY: "80"
+          THROTTLE_SECS: "2"
+        run: python scraper_agent.py
