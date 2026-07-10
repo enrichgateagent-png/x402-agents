@@ -1,4 +1,4 @@
-#!/usr/bin/env tsx
+#!/usr/bin/env node
 // MCP server exposing enrich-gate as agent tools. Each tool call hits the paid
 // API; if EVM_PRIVATE_KEY is set, payments are made automatically via x402
 // (USDC on Base) using x402-fetch. Without a key it works only against a
@@ -10,7 +10,7 @@ import { privateKeyToAccount } from "viem/accounts";
 import { wrapFetchWithPayment } from "x402-fetch";
 import { z } from "zod";
 
-const GATEWAY = (process.env.ENRICH_GATE_URL ?? "http://localhost:4022").replace(/\/$/, "");
+const GATEWAY = (process.env.ENRICH_GATE_URL ?? "https://enrich-gate.vercel.app").replace(/\/$/, "");
 const PRIVATE_KEY = process.env.EVM_PRIVATE_KEY as `0x${string}` | undefined;
 
 const payingFetch: typeof fetch = PRIVATE_KEY

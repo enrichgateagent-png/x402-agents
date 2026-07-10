@@ -2,13 +2,23 @@
   "name": "enrich-gate-mcp",
   "version": "0.1.0",
   "type": "module",
-  "description": "MCP server for enrich-gate: web search, neural search, and scraping tools that pay per call via x402 (USDC on Base). No API keys, no subscriptions.",
-  "bin": { "enrich-gate-mcp": "src/index.ts" },
+  "description": "MCP server: web search, neural search, scraping, and LLM inference tools that pay per call via x402 (USDC on Base). No API keys, no subscriptions.",
+  "bin": {
+    "enrich-gate-mcp": "dist/index.js"
+  },
   "scripts": {
     "start": "tsx src/index.ts",
-    "typecheck": "tsc --noEmit"
+    "typecheck": "tsc --noEmit",
+    "build": "tsc -p tsconfig.build.json && chmod +x dist/index.js",
+    "prepublishOnly": "npm run build"
   },
-  "keywords": ["mcp", "x402", "web-search", "scraping", "ai-agents"],
+  "keywords": [
+    "mcp",
+    "x402",
+    "web-search",
+    "scraping",
+    "ai-agents"
+  ],
   "dependencies": {
     "@modelcontextprotocol/sdk": "^1.29.0",
     "viem": "^2.21.0",
@@ -19,5 +29,11 @@
     "@types/node": "^26.1.1",
     "tsx": "^4.19.0",
     "typescript": "^5.8.0"
-  }
+  },
+  "main": "dist/index.js",
+  "files": [
+    "dist",
+    "README.md"
+  ],
+  "license": "MIT"
 }
