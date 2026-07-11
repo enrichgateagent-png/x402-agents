@@ -1,0 +1,29 @@
+name: Beacon Multi-Source Crawl
+
+# Expand the index beyond GitHub: npm + Hugging Face + PyPI -> /api/v1/register.
+# Uses only the public API (no backend coupling, no secrets).
+on:
+  schedule:
+    - cron: "40 */12 * * *"   # twice daily, off-peak
+  workflow_dispatch: {}
+
+concurrency:
+  group: beacon-multicrawl
+  cancel-in-progress: false
+
+jobs:
+  crawl:
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Crawl npm + Hugging Face + PyPI
+        working-directory: registry
+        env:
+          REGISTRY_URL: ${{ secrets.REGISTRY_URL || 'https://registry-ruby.vercel.app' }}
+          MAX_PER_QUERY: "150"
+          SLEEP: "0.1"
+        run: python multi_source_crawler.py
