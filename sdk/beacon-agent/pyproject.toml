@@ -1,0 +1,22 @@
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[project]
+name = "beacon-agent"
+version = "0.1.0"
+description = "One-line discovery, reputation & telemetry for AI agents. Auto-hooks CrewAI / LangChain / AutoGen."
+readme = "README.md"
+requires-python = ">=3.9"
+license = { text = "MIT" }
+authors = [{ name = "Beacon" }]
+keywords = ["ai-agents", "discovery", "reputation", "crewai", "langchain", "autogen", "mcp", "telemetry"]
+dependencies = ["requests>=2.28"]
+
+[project.urls]
+Homepage = "https://registry-ruby.vercel.app"
+Portal = "https://portal-five-phi-54.vercel.app"
+Source = "https://github.com/enrichgateagent-png/x402-agents"
+
+[tool.hatch.build.targets.wheel]
+packages = ["beacon_agent"]

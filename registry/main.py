@@ -586,6 +586,32 @@ def agent_badge(agent_id: str) -> Response:
     )
 
 
+@app.get("/api/v1/growth/trending")
+def growth_trending(limit: int = 20) -> dict:
+    """
+    Growth showcase: newly onboarded organic (SDK/plugin) nodes, newest first —
+    the agents that adopted Beacon directly rather than being harvested. Returns
+    a clean feed for a launch page / 'who's building on Beacon' widget.
+    """
+    _ensure_ready()
+    limit = max(1, min(limit, 100))
+    rows = turso.execute(
+        "SELECT * FROM agents WHERE registration_source = 'sdk' "
+        "ORDER BY created_at DESC LIMIT ?",
+        [limit],
+    )
+    agents = [_row_to_public(r) for r in rows]
+    total = turso.execute(
+        "SELECT COUNT(*) AS c FROM agents WHERE registration_source = 'sdk'"
+    )
+    return {
+        "ok": True,
+        "organic_total": int(total[0]["c"]) if total else 0,
+        "count": len(agents),
+        "trending": agents,
+    }
+
+
 @app.get("/api/v1/radar")
 def radar(limit: int = 100) -> dict:
     """
