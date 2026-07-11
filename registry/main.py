@@ -18,6 +18,7 @@ from datetime import datetime, timezone
 from typing import Optional
 
 import html
+import math
 
 import requests
 from fastapi import BackgroundTasks, FastAPI, HTTPException, Request
@@ -76,6 +77,29 @@ def _pushed_recently(pushed_at: Optional[str]) -> bool:
         return False
 
 
+def _health_score(stars: int, pushed_at: Optional[str], open_issues: int) -> int:
+    """
+    Composite 0-100 health score — the "stars lie" counter. Weights freshness
+    over raw popularity, so a fresh, actively-maintained agent outranks a dormant
+    repo coasting on old stars.
+      freshness 50% (days since last push) · stars 35% (log-scaled) · issue load 15%
+    """
+    fresh = 0.0
+    if pushed_at:
+        try:
+            dt = datetime.fromisoformat(pushed_at.replace("Z", "+00:00"))
+            if dt.tzinfo is None:
+                dt = dt.replace(tzinfo=timezone.utc)
+            days = max(0, (_utcnow() - dt).days)
+            # continuous decay: pushed today ~1.0, ~0.75 at 90d, 0 at 1yr+
+            fresh = max(0.0, (365 - days) / 365.0)
+        except (TypeError, ValueError):
+            fresh = 0.0
+    star_score = min(1.0, math.log10(max(0, stars) + 1) / 4.0)  # ~1.0 at 10k+ stars
+    issue_score = 1.0 / (1.0 + max(0, open_issues) / 150.0)     # fewer open issues = healthier
+    return round((0.50 * fresh + 0.35 * star_score + 0.15 * issue_score) * 100)
+
+
 def _row_to_public(row: dict) -> dict:
     last_seen = row["last_seen"]
     recent = False
@@ -110,6 +134,9 @@ def _row_to_public(row: dict) -> dict:
         "pushed_at": row.get("pushed_at"),
         "open_issues": int(row.get("open_issues", 0) or 0),
         "active": _pushed_recently(row.get("pushed_at")),
+        "health_score": _health_score(
+            int(row.get("stars", 0) or 0), row.get("pushed_at"), int(row.get("open_issues", 0) or 0)
+        ),
         "fraud_status": {
             "is_flagged": bool(int(row.get("is_fraudulent", 0) or 0)),
             "strikes": int(row.get("fraud_strikes", 0) or 0),
@@ -760,9 +787,24 @@ def leaderboard(limit: int = 50, offset: int = 0, online_only: bool = False) -> 
 
 @app.get("/api/v1/agents")
 def list_agents(limit: int = 100, online_only: bool = False, sort: str = "top") -> dict:
-    """sort=top (reputation/stars) or sort=recent (newest indexed first)."""
+    """sort=top (reputation/stars), sort=recent (newest indexed), or sort=health
+    (composite freshness+stars+issues — ranks maintained agents over dormant ones)."""
     _ensure_ready()
     limit = max(1, min(limit, 500))
+
+    if sort == "health":
+        # Rerank a candidate pool of enriched agents by computed health. Pool is
+        # drawn by stars AND recency so the ranking isn't just a stars proxy.
+        rows = turso.execute(
+            "SELECT * FROM agents WHERE is_fraudulent = 0 AND pushed_at IS NOT NULL "
+            "ORDER BY stars DESC LIMIT 600"
+        )
+        agents = [_row_to_public(r) for r in rows]
+        agents.sort(key=lambda a: (a["health_score"], a["stars"]), reverse=True)
+        if online_only:
+            agents = [a for a in agents if a["online"]]
+        return {"ok": True, "count": min(len(agents), limit), "sort": "health", "agents": agents[:limit]}
+
     order = (
         "created_at DESC"
         if sort == "recent"
