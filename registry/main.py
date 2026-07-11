@@ -554,6 +554,21 @@ async def _access_log_middleware(request: Request, call_next):
     return response
 
 
+@app.middleware("http")
+async def _cache_reads(request: Request, call_next):
+    """Let Vercel's CDN cache hot read endpoints so repeat queries skip the GCP hop."""
+    resp = await call_next(request)
+    if request.method == "GET":
+        p = request.url.path
+        if p == "/api/v1/search":
+            resp.headers["Cache-Control"] = "public, s-maxage=30, stale-while-revalidate=120"
+        elif p == "/api/v1/discovery":
+            resp.headers["Cache-Control"] = "public, s-maxage=60, stale-while-revalidate=300"
+        elif p.startswith("/discover/"):
+            resp.headers["Cache-Control"] = "public, s-maxage=300, stale-while-revalidate=600"
+    return resp
+
+
 @app.on_event("startup")
 def _on_startup() -> None:
     _ensure_ready()
