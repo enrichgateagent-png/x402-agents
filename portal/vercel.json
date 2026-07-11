@@ -12,6 +12,18 @@
     {
       "source": "/healthz",
       "destination": "http://34.45.7.252:8000/healthz"
+    },
+    {
+      "source": "/discover/:path*",
+      "destination": "http://34.45.7.252:8000/discover/:path*"
+    },
+    {
+      "source": "/sitemap.xml",
+      "destination": "http://34.45.7.252:8000/sitemap.xml"
+    },
+    {
+      "source": "/robots.txt",
+      "destination": "http://34.45.7.252:8000/robots.txt"
     }
   ]
 }

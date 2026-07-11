@@ -20,6 +20,7 @@ from typing import Optional
 from urllib.parse import quote
 
 import html
+import json
 import math
 
 import requests
@@ -574,6 +575,111 @@ Portal: {PORTAL_URL}
 """
     return Response(content=text, media_type="text/plain; charset=utf-8",
                     headers={"Cache-Control": "public, max-age=1800"})
+
+
+# --------------------------------------------------------------------------- #
+# Programmatic SEO — indexable capability landing pages + sitemap + robots.
+# Real agent listings (reusing /search) + schema.org JSON-LD. Thin pages are
+# skipped so we never ship doorway pages Google would penalize.
+# --------------------------------------------------------------------------- #
+
+SEO_CAPS: list[tuple[str, str]] = [
+    ("web-scraping", "web scraping"), ("pdf-extraction", "pdf extraction"),
+    ("browser-automation", "browser automation"), ("mcp-server", "mcp server"),
+    ("langchain", "langchain"), ("langgraph", "langgraph"), ("elizaos", "elizaos"),
+    ("rag", "rag retrieval"), ("trading-bot", "trading bot"), ("code-review", "code review"),
+    ("data-analysis", "data analysis"), ("voice-agent", "voice agent"), ("sql-agent", "sql agent"),
+    ("github-automation", "github automation"), ("discord-bot", "discord bot"),
+    ("telegram-bot", "telegram bot"), ("research-assistant", "research assistant"),
+    ("web-search", "web search"), ("multi-agent", "multi-agent orchestration"),
+    ("image-generation", "image generation"), ("summarization", "summarization"),
+    ("api-integration", "api integration"), ("knowledge-base", "knowledge base"),
+    ("customer-support", "customer support"),
+]
+_SEO_CAP_MAP = dict(SEO_CAPS)
+_SEO_MIN_RESULTS = 5
+
+
+def _seo_page_html(slug: str, label: str, agents: list[dict], total: int) -> str:
+    e = html.escape
+    title = f"{label.title()} AI Agents — {len(agents)} open-source options | Beacon"
+    desc = (f"Browse {len(agents)} open-source {label} AI agents, ranked by GitHub traction "
+            f"and maintenance. Free directory of {total:,}+ agents on Beacon.")
+    items = [{
+        "@type": "ListItem", "position": i + 1,
+        "item": {"@type": "SoftwareSourceCode", "name": a.get("name"),
+                 "codeRepository": a.get("mcp_endpoint"), "url": a.get("mcp_endpoint"),
+                 "keywords": ", ".join(a.get("capabilities_tags", [])[:8])},
+    } for i, a in enumerate(agents)]
+    jsonld = {"@context": "https://schema.org", "@graph": [
+        {"@type": "CollectionPage", "name": title, "description": desc,
+         "url": f"{PORTAL_URL}/discover/{slug}"},
+        {"@type": "BreadcrumbList", "itemListElement": [
+            {"@type": "ListItem", "position": 1, "name": "Beacon", "item": PORTAL_URL},
+            {"@type": "ListItem", "position": 2, "name": f"{label.title()} agents",
+             "item": f"{PORTAL_URL}/discover/{slug}"}]},
+        {"@type": "ItemList", "numberOfItems": len(items), "itemListElement": items}]}
+    cards = "".join(
+        f'<article class="c"><div class="r"><a class="n" href="{e(a.get("mcp_endpoint",""))}" '
+        f'rel="nofollow noopener" target="_blank">{e(a.get("name",""))}</a>'
+        f'<span class="s">★ {a.get("stars",0):,}</span></div>'
+        f'<div class="t">{"".join(f"<span>{e(t)}</span>" for t in a.get("capabilities_tags",[])[:5])}</div></article>'
+        for a in agents)
+    return f"""<!doctype html><html lang="en"><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>{e(title)}</title><meta name="description" content="{e(desc)}">
+<link rel="canonical" href="{PORTAL_URL}/discover/{slug}">
+<meta property="og:title" content="{e(title)}"><meta property="og:description" content="{e(desc)}">
+<meta name="robots" content="index,follow">
+<script type="application/ld+json">{json.dumps(jsonld)}</script>
+<style>body{{margin:0;background:#06070a;color:#cbd5e1;font-family:system-ui,sans-serif;line-height:1.6}}
+.w{{max-width:900px;margin:0 auto;padding:36px 20px 80px}}a{{color:#22d3ee;text-decoration:none}}
+h1{{color:#fff;font-size:1.9rem;margin:0 0 6px}}.sub{{color:#64748b;margin:0 0 22px}}
+.c{{border:1px solid #1e2430;background:#0d0f14;border-radius:12px;padding:13px 15px;margin-bottom:9px}}
+.r{{display:flex;justify-content:space-between;gap:10px;align-items:center}}.n{{font-weight:600;color:#fff}}
+.s{{color:#f59e0b;font-size:.85rem;white-space:nowrap}}.t{{margin-top:7px;display:flex;flex-wrap:wrap;gap:5px}}
+.t span{{font-size:.72rem;background:rgba(34,211,238,.08);color:#22d3ee;border:1px solid rgba(34,211,238,.2);border-radius:6px;padding:2px 8px}}
+.cta{{display:inline-block;margin:6px 0 24px;background:#22d3ee;color:#06070a;padding:9px 16px;border-radius:10px;font-weight:600}}
+code{{background:#141820;border:1px solid #1e2430;padding:2px 8px;border-radius:6px;color:#22d3ee}}</style></head>
+<body><div class="w"><p><a href="{PORTAL_URL}">← Beacon</a> · the search engine for AI agents</p>
+<h1>{e(label.title())} AI agents</h1>
+<p class="sub">{len(agents)} open-source {e(label)} agents from a live index of {total:,}+, ranked by GitHub traction.</p>
+<a class="cta" href="{PORTAL_URL}/?q={e(slug)}">Search all {e(label)} agents →</a>
+<p>Use these from your editor: <code>npx -y beacon-mcp</code>, then ask your AI to “find a {e(label)} agent”.</p>
+{cards}</div></body></html>"""
+
+
+@app.get("/discover/{slug}")
+def seo_discover(slug: str) -> Response:
+    """Indexable landing page for a capability, with real agents + JSON-LD."""
+    _ensure_ready()
+    label = _SEO_CAP_MAP.get(slug, slug.replace("-", " "))
+    agents = search_agents(q=label, limit=24).get("results", [])
+    if len(agents) < _SEO_MIN_RESULTS:
+        raise HTTPException(status_code=404, detail="not enough agents for this capability")
+    total = int(_tag_cache.get("total_agents") or 0)
+    return Response(content=_seo_page_html(slug, label, agents, total),
+                    media_type="text/html; charset=utf-8",
+                    headers={"Cache-Control": "public, max-age=3600"})
+
+
+@app.get("/sitemap.xml")
+def sitemap_xml() -> Response:
+    _ensure_ready()
+    urls = [f"{PORTAL_URL}/"] + [f"{PORTAL_URL}/discover/{s}" for s, _ in SEO_CAPS]
+    body = ('<?xml version="1.0" encoding="UTF-8"?>'
+            '<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">'
+            + "".join(f"<url><loc>{u}</loc><changefreq>daily</changefreq></url>" for u in urls)
+            + "</urlset>")
+    return Response(content=body, media_type="application/xml",
+                    headers={"Cache-Control": "public, max-age=3600"})
+
+
+@app.get("/robots.txt")
+def robots_txt() -> Response:
+    body = f"User-agent: *\nAllow: /\n\nSitemap: {PORTAL_URL}/sitemap.xml\n"
+    return Response(content=body, media_type="text/plain; charset=utf-8",
+                    headers={"Cache-Control": "public, max-age=3600"})
 
 
 @app.get("/healthz")
