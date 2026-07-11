@@ -37,7 +37,7 @@ if not logger.handlers:
     logger.addHandler(_h)
     logger.setLevel(logging.INFO)
 
-DEFAULT_REGISTRY_URL = "https://registry-ruby.vercel.app"
+DEFAULT_REGISTRY_URL = "http://34.45.7.252:8000"
 
 
 class BeaconClient:

@@ -1,363 +1,711 @@
 <!doctype html>
-<html lang="en" class="dark">
+<html lang="en">
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>Beacon — The search engine for AI agents</title>
-  <meta name="description" content="Search thousands of open-source AI agents by capability. Ranked by real GitHub traction, live-indexed, and searchable from your editor via MCP." />
+  <title>Beacon — open-source agent registry</title>
+  <meta name="description" content="Search open-source AI agents and MCP servers by capability. Wire tools into Cursor, Windsurf, or your stack." />
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500&family=Outfit:wght@400;500;600;700&display=swap" rel="stylesheet" />
   <script src="https://cdn.tailwindcss.com"></script>
   <script>
     tailwind.config = {
-      darkMode: "class",
-      theme: { extend: {
-        fontFamily: { sans: ["Inter", "ui-sans-serif", "system-ui", "sans-serif"], mono: ["ui-monospace", "SFMono-Regular", "monospace"] },
-        colors: { ink: { 950: "#08080c", 900: "#0d0d14", 800: "#14141f" }, iris: { 300: "#a5b4fc", 400: "#818cf8", 500: "#6366f1", 600: "#5b53e0" } },
-        keyframes: {
-          glow: { "0%,100%": { opacity: 1 }, "50%": { opacity: .4 } },
-          rise: { "0%": { opacity: 0, transform: "translateY(10px)" }, "100%": { opacity: 1, transform: "none" } },
-          blink: { "0%,100%": { opacity: 1 }, "50%": { opacity: .3 } },
-          ping2: { "75%,100%": { transform: "scale(2.4)", opacity: 0 } },
+      theme: {
+        extend: {
+          fontFamily: {
+            sans: ["Outfit", "system-ui", "sans-serif"],
+            mono: ["IBM Plex Mono", "ui-monospace", "monospace"],
+          },
+          colors: {
+            void: { DEFAULT: "#06070a", card: "#0d0f14", lift: "#141820", line: "#1e2430" },
+            pulse: { amber: "#f59e0b", cyan: "#22d3ee", violet: "#a78bfa", rose: "#fb7185" },
+          },
+          keyframes: {
+            fadeUp: { from: { opacity: 0, transform: "translateY(8px)" }, to: { opacity: 1, transform: "none" } },
+            ping: { "0%,100%": { opacity: 0.4 }, "50%": { opacity: 1 } },
+            sweep: { from: { transform: "rotate(0deg)" }, to: { transform: "rotate(360deg)" } },
+          },
+          animation: {
+            fadeUp: "fadeUp .4s ease-out both",
+            ping: "ping 2.5s ease-in-out infinite",
+            sweep: "sweep 24s linear infinite",
+          },
         },
-        animation: { glow: "glow 2s ease-in-out infinite", rise: "rise .45s cubic-bezier(.2,.7,.2,1) both", blink: "blink 1.1s steps(2,start) infinite", ping2: "ping2 1.6s cubic-bezier(0,0,.2,1) infinite" },
-      } },
+      },
     };
   </script>
-  <link rel="preconnect" href="https://fonts.googleapis.com" />
-  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&display=swap" rel="stylesheet" />
   <style>
     :root { color-scheme: dark; }
-    body {
-      background:
-        radial-gradient(900px 480px at 15% -8%, rgba(99,102,241,.18), transparent 60%),
-        radial-gradient(760px 420px at 95% 0%, rgba(139,92,246,.12), transparent 55%),
-        #08080c;
+    body { background: #06070a; }
+    .radar-bg {
+      background-image:
+        radial-gradient(circle at 50% 0%, rgba(34,211,238,.06) 0%, transparent 45%),
+        radial-gradient(circle at 80% 60%, rgba(167,139,250,.04) 0%, transparent 40%),
+        repeating-radial-gradient(circle at 50% 50%, transparent 0, transparent 39px, rgba(30,36,48,.35) 40px, transparent 41px);
     }
-    .surface { background: rgba(255,255,255,.025); border: 1px solid rgba(255,255,255,.07); }
-    .surface-hover { transition: transform .2s cubic-bezier(.2,.7,.2,1), border-color .2s, background .2s; }
-    .surface-hover:hover { transform: translateY(-2px); border-color: rgba(129,140,248,.35); background: rgba(255,255,255,.045); }
-    .divide-soft { border-color: rgba(255,255,255,.06); }
-    .grad-text { background: linear-gradient(100deg,#c7d2fe,#a78bfa 55%,#f0abfc); -webkit-background-clip: text; background-clip: text; color: transparent; }
-    .btn-grad { background: linear-gradient(100deg,#6366f1,#8b5cf6); }
-    ::-webkit-scrollbar { width: 9px; height: 9px; } ::-webkit-scrollbar-thumb { background: #23232e; border-radius: 9px; } ::-webkit-scrollbar-thumb:hover { background: #2f2f3d; }
-    .feed-scroll { scrollbar-width: thin; }
-    .clamp1 { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    .dot-grid {
+      background-image: radial-gradient(rgba(255,255,255,.07) 1px, transparent 1px);
+      background-size: 24px 24px;
+    }
+    .health-ring { --pct: 0; background: conic-gradient(#22d3ee calc(var(--pct) * 1%), #1e2430 0); }
+    .clamp2 { display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
+    .dock-scroll::-webkit-scrollbar { width: 4px; }
+    .dock-scroll::-webkit-scrollbar-thumb { background: #2a3344; border-radius: 4px; }
+    .search-glow:focus-within { box-shadow: 0 0 0 1px rgba(34,211,238,.3), 0 8px 32px rgba(0,0,0,.4); }
+    kbd { font-family: "IBM Plex Mono", monospace; }
   </style>
 </head>
-<body class="min-h-screen font-sans text-slate-300 antialiased">
+<body class="min-h-screen font-sans text-slate-200 antialiased radar-bg">
 
-  <!-- Nav -->
-  <nav class="sticky top-0 z-20 border-b border-white/5 bg-ink-950/70 backdrop-blur-xl">
-    <div class="mx-auto flex max-w-6xl items-center justify-between px-5 py-3.5">
-      <a href="#" class="flex items-center gap-2.5">
-        <span class="grid h-8 w-8 place-items-center rounded-lg btn-grad shadow-lg shadow-iris-500/25">
-          <svg viewBox="0 0 24 24" class="h-5 w-5 text-white" fill="none" stroke="currentColor" stroke-width="2.2"><path d="M12 3v2.5m0 13V21M4.5 12H2m20 0h-2.5M6 6l1.8 1.8M18 18l-1.8-1.8M18 6l-1.8 1.8M6 18l1.8-1.8" stroke-linecap="round"/><circle cx="12" cy="12" r="3" fill="currentColor" stroke="none"/></svg>
+  <!-- Command bar -->
+  <header class="sticky top-0 z-40 border-b border-void-line bg-void/90 backdrop-blur-xl">
+    <div class="mx-auto flex max-w-7xl items-center gap-4 px-4 py-3 sm:px-6">
+      <button id="btnHome" class="group flex shrink-0 items-center gap-2.5">
+        <span class="relative grid h-9 w-9 place-items-center rounded-lg bg-gradient-to-br from-pulse-cyan/20 to-pulse-violet/20 ring-1 ring-pulse-cyan/30">
+          <span class="absolute inset-0 rounded-lg border border-pulse-cyan/20 animate-ping"></span>
+          <svg viewBox="0 0 24 24" class="relative h-5 w-5 text-pulse-cyan" fill="none" stroke="currentColor" stroke-width="2">
+            <circle cx="12" cy="12" r="2" fill="currentColor" stroke="none"/>
+            <path d="M12 4v3M12 17v3M4 12h3M17 12h3M6.3 6.3l2.1 2.1M15.6 15.6l2.1 2.1M6.3 17.7l2.1-2.1M15.6 8.4l2.1-2.1" stroke-linecap="round"/>
+          </svg>
         </span>
-        <span class="text-[15px] font-bold tracking-tight text-white">Beacon</span>
-      </a>
-      <div class="flex items-center gap-1.5 text-sm">
-        <span id="navCount" class="mr-1 hidden items-center gap-1.5 rounded-full border border-white/10 bg-white/5 px-3 py-1 text-xs text-slate-300 sm:inline-flex">
-          <span class="relative flex h-1.5 w-1.5"><span class="absolute h-full w-full animate-ping2 rounded-full bg-emerald-400"></span><span class="relative h-1.5 w-1.5 rounded-full bg-emerald-400"></span></span>
-          <span id="navCountNum" class="tabular-nums font-semibold text-white">—</span> indexed
+        <div class="text-left hidden sm:block">
+          <div class="text-sm font-semibold text-white group-hover:text-pulse-cyan transition">Beacon</div>
+        </div>
+      </button>
+
+      <form id="searchForm" class="search-glow flex flex-1 items-center gap-3 rounded-xl border border-void-line bg-void-card px-4 py-2.5 transition">
+        <svg class="h-4 w-4 shrink-0 text-slate-500" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><circle cx="11" cy="11" r="7"/><path d="m21 21-4.3-4.3" stroke-linecap="round"/></svg>
+        <input id="searchInput" type="search" autofocus autocomplete="off" placeholder="Search by capability: pdf parsing, browser control, trading…" class="w-full bg-transparent text-sm text-white outline-none placeholder-slate-500" />
+        <kbd class="hidden rounded border border-void-line px-1.5 py-0.5 text-[10px] text-slate-500 sm:inline">/</kbd>
+      </form>
+
+      <div class="hidden items-center gap-3 lg:flex">
+        <span id="livePill" class="flex items-center gap-2 rounded-full border border-emerald-500/20 bg-emerald-500/10 px-3 py-1 text-xs text-emerald-300">
+          <span class="h-1.5 w-1.5 rounded-full bg-emerald-400 animate-pulse"></span>
+          <span id="liveCount" class="tabular-nums font-medium">—</span>
         </span>
-        <a href="https://github.com/enrichgateagent-png/x402-agents" target="_blank" rel="noopener" class="rounded-lg px-3 py-1.5 text-slate-400 transition hover:text-white">GitHub</a>
-        <a href="#mcp" class="rounded-lg btn-grad px-3.5 py-1.5 font-medium text-white shadow-lg shadow-iris-500/25 transition hover:brightness-110">Add to your editor</a>
+        <a href="#integrate" class="rounded-lg border border-void-line px-3 py-1.5 text-xs text-slate-400 hover:border-pulse-cyan/40 hover:text-pulse-cyan transition">MCP setup</a>
       </div>
-    </div>
-  </nav>
-
-  <!-- Hero -->
-  <header class="mx-auto max-w-3xl px-5 pt-16 pb-6 text-center sm:pt-24">
-    <h1 class="text-4xl font-extrabold leading-[1.05] tracking-tight text-white sm:text-6xl">
-      Search, Discover &amp; Verify<br class="hidden sm:block" />
-      <span class="grad-text"><span id="heroCount">3,000+</span> AI Agents</span>
-    </h1>
-    <p class="mx-auto mt-5 max-w-2xl text-[15px] leading-relaxed text-slate-400">
-      The open-source index for autonomous frameworks. Search production-ready agents by capability, ecosystem stars, and live repository maintenance signals.
-    </p>
-
-    <form id="searchForm" class="group mx-auto mt-8 flex max-w-xl items-center gap-2 rounded-2xl border border-white/10 bg-white/[.04] p-2 shadow-2xl shadow-black/40 backdrop-blur transition focus-within:border-iris-400/60 focus-within:shadow-iris-500/10">
-      <svg class="ml-2.5 h-5 w-5 shrink-0 text-slate-500 transition group-focus-within:text-iris-300" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="7"/><path d="m21 21-4.3-4.3" stroke-linecap="round"/></svg>
-      <input id="searchInput" type="text" autocomplete="off" placeholder="Search: pdf extraction, web scraping, trading bot…" class="w-full bg-transparent px-1 py-2.5 text-[15px] text-white placeholder-slate-500 outline-none" />
-      <button type="submit" class="shrink-0 rounded-xl btn-grad px-5 py-2.5 text-sm font-semibold text-white shadow-lg shadow-iris-500/25 transition hover:brightness-110 active:scale-[.98]">Search</button>
-    </form>
-    <div id="chips" class="mt-4 flex flex-wrap items-center justify-center gap-2 text-[13px]"></div>
-
-    <div class="mx-auto mt-7 flex max-w-xl flex-wrap items-center justify-center gap-x-2.5 gap-y-2 text-xs text-slate-500">
-      <span class="text-slate-400">Building an agent?</span>
-      <code class="rounded-md border border-white/10 bg-ink-950/70 px-2 py-1 font-mono text-[12px] text-iris-200">npx -y beacon-mcp</code>
-      <span>to query this index locally, or</span>
-      <a href="#mcp" class="font-medium text-iris-300 hover:text-iris-200">grab your live status badge →</a>
     </div>
   </header>
 
-  <!-- Main -->
-  <main class="mx-auto max-w-6xl px-5 pb-24 pt-8">
-    <div class="grid grid-cols-1 gap-10 lg:grid-cols-3">
+  <div class="mx-auto max-w-7xl px-4 py-6 sm:px-6">
+    <div class="grid gap-6 lg:grid-cols-[1fr_340px] xl:grid-cols-[1fr_380px]">
 
-      <!-- Results -->
-      <section class="lg:col-span-2">
-        <div class="mb-5 flex items-end justify-between gap-3">
-          <div>
-            <h2 id="sectionTitle" class="text-lg font-bold text-white">Top agents</h2>
-            <p id="sectionSub" class="mt-0.5 text-xs text-slate-500">Ranked by reputation & GitHub stars</p>
+      <!-- Discovery column -->
+      <main class="min-w-0">
+        <!-- Hero / idle state -->
+        <section id="heroSection" class="mb-8 rounded-2xl border border-void-line bg-void-card/60 p-6 sm:p-8 dot-grid">
+          <div class="max-w-xl">
+            <h1 class="text-3xl font-semibold leading-tight text-white sm:text-4xl">
+              Find open-source agents and wire them into your editor.
+            </h1>
+            <p class="mt-3 text-sm leading-relaxed text-slate-400">
+              Beacon indexes GitHub repos for MCP servers, LangChain tools, CrewAI crews, and other agent frameworks.
+              Search by capability, inspect health and tags, then add agents to your dock or connect via MCP.
+            </p>
           </div>
-          <div class="flex items-center gap-2">
-            <button id="resetBtn" class="hidden text-xs text-iris-300 hover:text-iris-400">← all agents</button>
-            <div id="sortToggle" class="inline-flex rounded-lg border border-white/10 bg-white/[.03] p-0.5 text-xs">
-              <button data-sort="top" class="rounded-md px-3 py-1.5 font-medium text-white transition">Top</button>
-              <button data-sort="health" class="rounded-md px-3 py-1.5 text-slate-400 transition hover:text-white">Healthy</button>
-              <button data-sort="recent" class="rounded-md px-3 py-1.5 text-slate-400 transition hover:text-white">Recent</button>
+
+          <!-- Ecosystem filters -->
+          <div class="mt-6">
+            <p class="mb-2 text-xs text-slate-500">Frameworks</p>
+            <div class="flex flex-wrap gap-2" id="ecosystemFilters"></div>
+          </div>
+          <div class="mt-4">
+            <p class="mb-2 text-xs text-slate-500">Capabilities</p>
+            <div class="flex flex-wrap gap-2" id="trendingTags"></div>
+          </div>
+
+          <!-- Browse modes — always visible -->
+          <div class="mt-5 flex flex-wrap items-center gap-3">
+            <span class="text-xs text-slate-500">Browse</span>
+            <div class="flex flex-wrap gap-1 rounded-lg border border-void-line bg-void-card p-1 text-xs" id="browseFilters">
+              <button data-mode="search" class="mode-btn hidden rounded-md px-3 py-1.5 font-medium text-pulse-cyan bg-pulse-cyan/10">Matches</button>
+              <button data-mode="top" class="mode-btn rounded-md px-3 py-1.5 text-slate-400 hover:text-white">Top</button>
+              <button data-mode="health" class="mode-btn rounded-md px-3 py-1.5 text-slate-400 hover:text-white">Healthy</button>
+              <button data-mode="recent" class="mode-btn rounded-md px-3 py-1.5 text-slate-400 hover:text-white">New</button>
             </div>
           </div>
+
+          <div class="mt-6 grid grid-cols-3 gap-3">
+            <div class="rounded-xl border border-void-line bg-void/80 p-3">
+              <div id="statTotal" class="text-xl font-semibold tabular-nums text-white">—</div>
+              <div class="text-[11px] text-slate-500">Indexed agents <span id="statLiveDot" class="text-emerald-400">●</span></div>
+            </div>
+            <div class="rounded-xl border border-void-line bg-void/80 p-3">
+              <div id="statHealthy" class="text-xl font-semibold tabular-nums text-pulse-cyan">—</div>
+              <div class="text-[11px] text-slate-500">Active (90 days)</div>
+            </div>
+            <div class="rounded-xl border border-void-line bg-void/80 p-3">
+              <div id="statDocked" class="text-xl font-semibold tabular-nums text-pulse-amber">0</div>
+              <div class="text-[11px] text-slate-500">In your dock</div>
+            </div>
+          </div>
+        </section>
+
+        <!-- Filter bar (sticky context when browsing results) -->
+        <div id="resultsToolbar" class="mb-4 hidden flex-wrap items-center justify-between gap-3">
+          <div id="resultMeta" class="text-sm text-slate-500">Search or browse the index</div>
+          <div class="flex gap-1 rounded-lg border border-void-line bg-void-card p-1 text-xs" id="browseFiltersResults">
+            <button data-mode="search" class="mode-btn hidden rounded-md px-3 py-1.5 font-medium text-pulse-cyan bg-pulse-cyan/10">Matches</button>
+            <button data-mode="top" class="mode-btn rounded-md px-3 py-1.5 text-slate-400 hover:text-white">Top</button>
+            <button data-mode="health" class="mode-btn rounded-md px-3 py-1.5 text-slate-400 hover:text-white">Healthy</button>
+            <button data-mode="recent" class="mode-btn rounded-md px-3 py-1.5 text-slate-400 hover:text-white">New</button>
+          </div>
+        </div>
+        <div id="resultMetaHome" class="mb-4 text-sm text-slate-500">Search or browse the index</div>
+
+        <!-- Loading -->
+        <div id="loading" class="hidden space-y-3">
+          <div class="h-24 animate-pulse rounded-xl bg-void-lift"></div>
+          <div class="h-24 animate-pulse rounded-xl bg-void-lift"></div>
+          <div class="h-24 animate-pulse rounded-xl bg-void-lift"></div>
         </div>
 
-        <div id="grid" class="grid grid-cols-1 gap-3.5 sm:grid-cols-2"></div>
-        <div id="empty" class="hidden py-20 text-center text-sm text-slate-500">No agents matched — try a broader capability.</div>
-        <div id="loading" class="py-20 text-center text-sm text-slate-500">Loading the index…</div>
-
-        <div id="pager" class="mt-7 hidden items-center justify-between gap-3">
-          <button id="prevBtn" class="rounded-xl border border-white/10 bg-white/[.03] px-4 py-2 text-sm text-slate-300 transition enabled:hover:border-iris-400/40 enabled:hover:text-white disabled:cursor-not-allowed disabled:opacity-30">← Prev</button>
-          <span id="pageInfo" class="text-xs text-slate-500 tabular-nums">—</span>
-          <button id="nextBtn" class="rounded-xl border border-white/10 bg-white/[.03] px-4 py-2 text-sm text-slate-300 transition enabled:hover:border-iris-400/40 enabled:hover:text-white disabled:cursor-not-allowed disabled:opacity-30">Next →</button>
+        <div id="empty" class="hidden rounded-2xl border border-dashed border-void-line py-16 text-center">
+          <p class="text-lg text-white">No agents match</p>
+          <p class="mt-2 text-sm text-slate-500">Try: <button class="suggest-q text-pulse-cyan hover:underline">mcp server</button> · <button class="suggest-q text-pulse-cyan hover:underline">browser automation</button> · <button class="suggest-q text-pulse-cyan hover:underline">rag pipeline</button></p>
         </div>
-      </section>
 
-      <!-- Browse panel -->
-      <aside class="lg:col-span-1">
-        <div class="sticky top-20 space-y-7">
-          <div>
-            <h3 class="mb-3 text-xs font-semibold uppercase tracking-widest text-slate-400">Browse by framework</h3>
-            <div id="cats" class="flex flex-col gap-2"></div>
+        <!-- Agent nodes -->
+        <div id="results" class="space-y-3"></div>
+
+        <div id="pager" class="mt-6 hidden items-center justify-between">
+          <button id="prevBtn" class="rounded-lg border border-void-line px-4 py-2 text-sm enabled:hover:bg-void-lift disabled:opacity-30">← Prev</button>
+          <span id="pageInfo" class="text-xs text-slate-500 tabular-nums"></span>
+          <button id="nextBtn" class="rounded-lg border border-void-line px-4 py-2 text-sm enabled:hover:bg-void-lift disabled:opacity-30">Next →</button>
+        </div>
+      </main>
+
+      <!-- Wire Dock — the "browser tab" replacement -->
+      <aside class="lg:sticky lg:top-[72px] lg:self-start">
+        <div class="rounded-2xl border border-void-line bg-void-card overflow-hidden">
+          <div class="flex items-center justify-between border-b border-void-line px-4 py-3">
+            <div>
+              <h2 class="text-sm font-semibold text-white">Wire dock</h2>
+              <p class="text-[11px] text-slate-500">Agents you selected from search</p>
+            </div>
+            <span id="dockBadge" class="rounded-full bg-pulse-amber/15 px-2 py-0.5 text-[10px] font-medium text-pulse-amber">0 wired</span>
           </div>
-          <div>
-            <h3 class="mb-3 text-xs font-semibold uppercase tracking-widest text-slate-400">Popular capabilities</h3>
-            <div id="caps" class="flex flex-wrap gap-2"></div>
+
+          <div id="dockEmpty" class="px-4 py-10 text-center">
+            <div class="mx-auto mb-3 grid h-14 w-14 place-items-center rounded-full border border-dashed border-void-line">
+              <svg class="h-6 w-6 text-slate-600" fill="none" stroke="currentColor" stroke-width="1.5" viewBox="0 0 24 24"><path d="M13 10V3L4 14h7v7l9-11h-7z" stroke-linecap="round" stroke-linejoin="round"/></svg>
+            </div>
+            <p class="text-sm text-slate-300 font-medium">No agents wired yet</p>
+            <p class="mt-1 text-xs text-slate-500">Search above and click Wire to save agents here.</p>
           </div>
+
+          <div id="dockList" class="dock-scroll hidden max-h-[280px] overflow-y-auto divide-y divide-void-line"></div>
+
+          <!-- Inspector -->
+          <div id="inspector" class="hidden border-t border-void-line">
+            <div class="px-4 py-3">
+              <p class="text-xs text-slate-500">Details</p>
+              <h3 id="inspName" class="mt-1 truncate text-base font-semibold text-white"></h3>
+              <p id="inspId" class="truncate font-mono text-[11px] text-slate-500"></p>
+            </div>
+            <div class="px-4 pb-3">
+              <div id="inspTags" class="flex flex-wrap gap-1"></div>
+              <div id="inspMeta" class="mt-3 grid grid-cols-2 gap-2 text-xs"></div>
+            </div>
+            <div class="space-y-2 border-t border-void-line bg-void/50 p-4">
+              <button id="btnWirePrimary" class="w-full rounded-lg bg-pulse-cyan/15 py-2.5 text-sm font-medium text-pulse-cyan ring-1 ring-pulse-cyan/30 hover:bg-pulse-cyan/25 transition">
+                ⚡ Wire to dock
+              </button>
+              <button id="btnCopyMcp" class="w-full rounded-lg border border-void-line py-2 text-xs text-slate-400 hover:text-white transition">
+                Copy MCP discover snippet
+              </button>
+              <button id="btnCopyManifest" class="w-full rounded-lg border border-void-line py-2 text-xs text-slate-400 hover:text-white transition">
+                Copy agent manifest JSON
+              </button>
+              <a id="btnViewSource" href="#" target="_blank" rel="noopener" class="block text-center text-[11px] text-slate-600 hover:text-slate-400 transition">View source repo ↗</a>
+            </div>
+          </div>
+
+          <!-- Stack export -->
+          <div id="dockActions" class="hidden border-t border-void-line p-4 space-y-2">
+            <button id="btnExportStack" class="w-full rounded-lg bg-pulse-amber/15 py-2.5 text-sm font-medium text-pulse-amber ring-1 ring-pulse-amber/30 hover:bg-pulse-amber/25 transition">
+              Export stack manifest
+            </button>
+            <button id="btnClearDock" class="w-full py-1.5 text-xs text-slate-600 hover:text-slate-400 transition">Clear dock</button>
+          </div>
+        </div>
+
+        <!-- Quick wire from editor -->
+        <div id="integrate" class="mt-4 rounded-2xl border border-void-line bg-void-card p-4">
+          <p class="text-xs font-medium text-white">Connect via MCP</p>
+          <p class="mt-1 text-[11px] text-slate-500">Run the Beacon MCP server locally in your editor:</p>
+          <code class="mt-3 block rounded-lg bg-void/80 p-3 font-mono text-[10px] leading-relaxed text-pulse-cyan break-all">BEACON_REGISTRY_URL=http://34.45.7.252:8000 npx -y beacon-mcp</code>
+          <button id="copyEditorMcp" class="mt-2 w-full rounded-lg border border-void-line py-2 text-xs text-slate-400 hover:text-white transition">Copy command</button>
         </div>
       </aside>
     </div>
+  </div>
 
-    <!-- Security watch -->
-    <section class="mt-16">
-      <div class="mb-5 flex items-center gap-3">
-        <span class="grid h-8 w-8 place-items-center rounded-lg bg-red-500/12 ring-1 ring-red-500/25">
-          <svg class="h-4 w-4 text-red-400" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 9v4m0 4h.01M10.3 3.9 1.8 18a2 2 0 0 0 1.7 3h17a2 2 0 0 0 1.7-3L13.7 3.9a2 2 0 0 0-3.4 0Z" stroke-linecap="round" stroke-linejoin="round"/></svg>
-        </span>
-        <div>
-          <h3 class="text-sm font-bold text-white">Security watch</h3>
-          <p class="text-xs text-slate-500">Nodes quarantined by the anti-fraud engine (<span id="flaggedCount">0</span>).</p>
-        </div>
-      </div>
-      <div id="fraudGrid" class="grid grid-cols-1 gap-3.5 sm:grid-cols-2 lg:grid-cols-3"></div>
-      <div id="fraudClear" class="surface rounded-2xl py-9 text-center text-sm text-emerald-300/90">✓ No fraudulent nodes detected — the network is clean.</div>
-    </section>
-
-    <!-- MCP CTA -->
-    <section id="mcp" class="mt-16 overflow-hidden rounded-3xl border border-white/10 bg-gradient-to-br from-iris-500/10 to-fuchsia-500/[.06] p-8 text-center sm:p-12">
-      <h3 class="text-2xl font-bold text-white">Search agents from your editor</h3>
-      <p class="mx-auto mt-2 max-w-lg text-sm text-slate-400">Add Beacon to Claude, Cursor, Cline or Windsurf and let your agent find other agents — one line, no API key.</p>
-      <div class="mx-auto mt-6 flex max-w-md items-center justify-between gap-3 rounded-xl border border-white/10 bg-ink-950/60 px-4 py-3 font-mono text-sm">
-        <span class="text-iris-200">npx -y beacon-mcp</span>
-        <button id="copyMcp" class="rounded-md border border-white/10 px-2.5 py-1 text-xs text-slate-400 transition hover:text-white">Copy</button>
-      </div>
-    </section>
-  </main>
-
-  <footer class="border-t border-white/5 py-8 text-center text-xs text-slate-600">
-    Beacon · <span id="footCount" class="tabular-nums text-slate-400">—</span> agents indexed · <a href="https://registry-ruby.vercel.app" class="text-slate-500 hover:text-slate-300">API</a>
+  <footer class="mt-8 border-t border-void-line py-6 text-center text-xs text-slate-600">
+    Beacon registry · <a href="http://34.45.7.252:8000/llms.txt" class="hover:text-slate-400">llms.txt</a> ·
+    <a href="http://34.45.7.252:8000" class="hover:text-slate-400">API</a> ·
+    <a href="http://34.45.7.252:8001/sse" class="hover:text-slate-400">MCP SSE</a>
   </footer>
 
+  <!-- Toast -->
+  <div id="toast" class="pointer-events-none fixed bottom-6 left-1/2 z-50 -translate-x-1/2 translate-y-4 opacity-0 transition-all duration-300">
+    <div class="rounded-full border border-void-line bg-void-card px-4 py-2 text-sm text-white shadow-2xl"></div>
+  </div>
+
   <script>
-    const API = "https://registry-ruby.vercel.app";
+    const API = "";
     const $ = (id) => document.getElementById(id);
-    const grid = $("grid"), loading = $("loading"), empty = $("empty"), sectionTitle = $("sectionTitle"), sectionSub = $("sectionSub"), resetBtn = $("resetBtn");
-    const esc = (s) => String(s ?? "").replace(/[&<>"']/g, c => ({ "&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;" }[c]));
-    const host = (u) => { try { return new URL(u).host.replace(/^www\./, "") + new URL(u).pathname; } catch { return u; } };
-    const fmtStars = (n) => { n = Number(n) || 0; return n >= 1000 ? (n/1000).toFixed(n >= 10000 ? 0 : 1).replace(/\.0$/, "") + "k" : String(n); };
+    const esc = (s) => String(s ?? "").replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
+    const fmtStars = (n) => { n = Number(n) || 0; return n >= 1e6 ? (n / 1e6).toFixed(1) + "M" : n >= 1000 ? (n / 1000).toFixed(n >= 1e4 ? 0 : 1).replace(/\.0$/, "") + "k" : String(n); };
+
+    const ECOSYSTEMS = [
+      { q: "mcp server", label: "MCP" },
+      { q: "langchain", label: "LangChain" },
+      { q: "langgraph", label: "LangGraph" },
+      { q: "crewai", label: "CrewAI" },
+      { q: "autogen", label: "AutoGen" },
+      { q: "elizaos", label: "ElizaOS" },
+      { q: "llamaindex", label: "LlamaIndex" },
+      { q: "semantic-kernel", label: "Semantic Kernel" },
+      { q: "n8n", label: "n8n" },
+    ];
+    const TRENDING = ["browser automation", "pdf extraction", "trading bot", "rag", "web scraping", "multi-agent", "voice agent", "crypto bot", "browser control", "data extraction"];
+    const PAGE_SIZE = 12;
+    const DOCK_KEY = "beacon:wire-dock";
+    const MAX_DOCK = 8;
+    const COUNT_POLL_MS = 30_000;
+
+    let totalCount = 0, page = 0, browseMode = "top", searching = false, currentQuery = "";
+    let debounceTimer = null, selectedAgent = null, activeEcosystem = "";
+    let dock = [];
+
+    function animateCount(el, n) {
+      if (!el) return;
+      const end = Number(n) || 0;
+      const start = parseInt(String(el.textContent).replace(/\D/g, "")) || 0;
+      if (start === end) { el.textContent = end.toLocaleString(); return; }
+      const t0 = performance.now();
+      (function step(now) {
+        const p = Math.min(1, (now - t0) / 600);
+        el.textContent = Math.round(start + (end - start) * (1 - Math.pow(1 - p, 3))).toLocaleString();
+        if (p < 1) requestAnimationFrame(step);
+      })(t0);
+    }
+
+    async function refreshRegistryCount() {
+      try {
+        const h = await fetch(`${API}/api/v1/health`).then((r) => r.json());
+        if (h.ok) {
+          setStats({
+            total_count: h.total_agents,
+            active_agents_90d: h.active_agents_90d,
+          });
+        }
+      } catch {}
+    }
+
+    function toast(msg) {
+      const t = $("toast");
+      t.querySelector("div").textContent = msg;
+      t.classList.remove("opacity-0", "translate-y-4");
+      clearTimeout(toast._t);
+      toast._t = setTimeout(() => t.classList.add("opacity-0", "translate-y-4"), 2200);
+    }
+
+    function loadDock() {
+      try { dock = JSON.parse(localStorage.getItem(DOCK_KEY) || "[]"); } catch { dock = []; }
+      renderDock();
+    }
+
+    function saveDock() {
+      try { localStorage.setItem(DOCK_KEY, JSON.stringify(dock)); } catch {}
+      renderDock();
+    }
+
+    function agentManifest(a) {
+      return {
+        agent_id: a.agent_id,
+        name: a.name,
+        endpoint: a.mcp_endpoint,
+        capabilities: a.capabilities_tags || [],
+        health_score: a.health_score,
+        stars: a.stars,
+        active: a.active,
+        success_rate: a.success_rate,
+      };
+    }
+
+    function mcpSnippet(a) {
+      return JSON.stringify({ tool: "beacon.find_agent", query: (a.capabilities_tags || []).slice(0, 3).join(" ") || a.name, preferred_agent_id: a.agent_id }, null, 2);
+    }
+
+    function wireAgent(a) {
+      if (!a?.agent_id) return;
+      if (dock.some((d) => d.agent_id === a.agent_id)) { toast("Already in dock"); inspect(a); return; }
+      if (dock.length >= MAX_DOCK) { toast(`Dock full (${MAX_DOCK} max)`); return; }
+      dock.unshift(agentManifest(a));
+      saveDock();
+      inspect(a);
+      toast(`Wired ${a.name}`);
+    }
+
+    function removeFromDock(id) {
+      dock = dock.filter((d) => d.agent_id !== id);
+      saveDock();
+      if (selectedAgent?.agent_id === id) selectedAgent = dock[0] || null;
+      if (selectedAgent) inspectRaw(selectedAgent); else hideInspector();
+    }
+
+    function renderDock() {
+      $("statDocked").textContent = dock.length;
+      $("dockBadge").textContent = `${dock.length} wired`;
+      $("dockEmpty").classList.toggle("hidden", dock.length > 0);
+      $("dockList").classList.toggle("hidden", dock.length === 0);
+      $("dockActions").classList.toggle("hidden", dock.length === 0);
+
+      $("dockList").innerHTML = dock.map((a) => `
+        <div class="flex items-center gap-2 px-3 py-2.5 hover:bg-void-lift/50 cursor-pointer group ${selectedAgent?.agent_id === a.agent_id ? "bg-void-lift/80" : ""}" data-dock-id="${esc(a.agent_id)}">
+          <span class="grid h-8 w-8 shrink-0 place-items-center rounded-lg bg-pulse-cyan/10 text-xs font-bold text-pulse-cyan">${esc((a.name || "?")[0].toUpperCase())}</span>
+          <div class="min-w-0 flex-1">
+            <div class="truncate text-sm text-white">${esc(a.name)}</div>
+            <div class="truncate font-mono text-[10px] text-slate-500">${esc(a.agent_id)}</div>
+          </div>
+          <button class="remove-dock shrink-0 rounded p-1 text-slate-600 opacity-0 group-hover:opacity-100 hover:text-pulse-rose transition" data-id="${esc(a.agent_id)}" title="Unwire">✕</button>
+        </div>
+      `).join("");
+    }
+
+    function hideInspector() {
+      $("inspector").classList.add("hidden");
+      selectedAgent = null;
+    }
+
+    function inspectRaw(a) {
+      selectedAgent = a;
+      $("inspector").classList.remove("hidden");
+      $("inspName").textContent = a.name || a.agent_id;
+      $("inspId").textContent = a.agent_id;
+      const tags = a.capabilities || a.capabilities_tags || [];
+      $("inspTags").innerHTML = tags.slice(0, 10).map((t) =>
+        `<span class="rounded-md bg-void-lift px-2 py-0.5 text-[10px] text-slate-300">${esc(t)}</span>`
+      ).join("") || `<span class="text-xs text-slate-600">No tags</span>`;
+
+      const health = a.health_score ?? 0;
+      const rate = a.success_rate != null ? `${Math.round(a.success_rate * 100)}%` : "—";
+      $("inspMeta").innerHTML = `
+        <div class="rounded-lg bg-void/60 p-2"><div class="text-slate-500">Health</div><div class="font-medium text-pulse-cyan">${health || "—"}</div></div>
+        <div class="rounded-lg bg-void/60 p-2"><div class="text-slate-500">Stars</div><div class="font-medium">${a.stars ? fmtStars(a.stars) : "—"}</div></div>
+        <div class="rounded-lg bg-void/60 p-2"><div class="text-slate-500">Success</div><div class="font-medium">${rate}</div></div>
+        <div class="rounded-lg bg-void/60 p-2"><div class="text-slate-500">Status</div><div class="font-medium ${a.active ? "text-emerald-400" : "text-slate-500"}">${a.active ? "Active" : "Dormant"}</div></div>
+      `;
+      $("btnViewSource").href = a.endpoint || a.mcp_endpoint || "#";
+      renderDock();
+    }
+
+    function inspect(a) { inspectRaw(agentManifest(a)); selectedAgent = { ...agentManifest(a), mcp_endpoint: a.mcp_endpoint, capabilities_tags: a.capabilities_tags }; }
 
     function relTime(iso) {
       if (!iso) return "";
-      const t = new Date(iso).getTime(); if (isNaN(t)) return "";
-      const s = Math.max(0, (Date.now() - t) / 1000);
-      if (s < 60) return "just now";
-      const m = s/60; if (m < 60) return `${Math.floor(m)}m ago`;
-      const h = m/60; if (h < 24) return `${Math.floor(h)}h ago`;
-      const d = h/24; if (d < 30) return `${Math.floor(d)}d ago`;
-      return new Date(t).toLocaleDateString();
-    }
-    function animateCount(el, target) {
-      const start = parseInt(String(el.textContent).replace(/\D/g, "")) || 0, end = Number(target) || 0, t0 = performance.now();
-      (function step(now){ const p = Math.min(1,(now-t0)/800); el.textContent = Math.round(start+(end-start)*(1-Math.pow(1-p,3))).toLocaleString(); if(p<1) requestAnimationFrame(step); })(t0);
+      const s = Math.max(0, (Date.now() - new Date(iso).getTime()) / 1000);
+      if (s < 3600) return `${Math.floor(s / 60)}m ago`;
+      if (s < 86400) return `${Math.floor(s / 3600)}h ago`;
+      return `${Math.floor(s / 86400)}d ago`;
     }
 
-    function statusDot(a) {
-      const on = a.pushed_at ? !!a.active : !!a.online;
-      const label = a.pushed_at ? (on ? "Active" : "Dormant") : (on ? "Online" : "Idle");
-      const c = on ? "bg-emerald-400" : "bg-slate-600";
-      const ring = on ? "shadow-[0_0_8px_1px_rgba(52,211,153,.7)]" : "";
-      const tc = on ? "text-emerald-300/90" : "text-slate-500";
-      return `<span class="inline-flex shrink-0 items-center gap-1.5 text-[11px] ${tc}"><span class="h-1.5 w-1.5 rounded-full ${c} ${ring}"></span>${label}</span>`;
-    }
+    function nodeCard(a, i) {
+      const tags = (a.capabilities_tags || []).slice(0, 5);
+      const health = a.health_score ?? 0;
+      const wired = dock.some((d) => d.agent_id === a.agent_id);
+      const flagged = a.fraud_status?.is_flagged;
 
-    function card(a, i) {
-      const tags = (a.capabilities_tags || []).slice(0, 4);
-      const stars = (a.stars ?? 0) > 0;
       return `
-        <article class="surface surface-hover animate-rise rounded-2xl p-4" style="animation-delay:${Math.min(i,12)*22}ms">
-          <div class="flex items-start justify-between gap-2">
-            <div class="min-w-0">
-              <h4 class="clamp1 font-semibold text-white">${esc(a.name)}</h4>
-              <a href="${esc(a.mcp_endpoint)}" target="_blank" rel="noopener" class="clamp1 mt-0.5 block text-xs text-slate-500 hover:text-iris-300">${esc(host(a.mcp_endpoint))}</a>
+        <article class="animate-fadeUp group rounded-xl border border-void-line bg-void-card p-4 transition hover:border-pulse-cyan/30 hover:bg-void-lift/30 ${flagged ? "ring-1 ring-pulse-rose/40" : ""}" style="animation-delay:${Math.min(i, 10) * 35}ms" data-agent='${esc(JSON.stringify(a))}'>
+          <div class="flex gap-4">
+            <div class="relative shrink-0">
+              <div class="health-ring grid h-12 w-12 place-items-center rounded-full p-[3px]" style="--pct:${health}">
+                <div class="grid h-full w-full place-items-center rounded-full bg-void-card text-xs font-bold text-pulse-cyan">${health || "—"}</div>
+              </div>
+              ${a.online ? '<span class="absolute -right-0.5 -top-0.5 h-2.5 w-2.5 rounded-full bg-emerald-400 ring-2 ring-void-card"></span>' : ""}
             </div>
-            ${statusDot(a)}
+            <div class="min-w-0 flex-1">
+              <div class="flex flex-wrap items-start justify-between gap-2">
+                <div class="min-w-0">
+                  <h3 class="truncate text-base font-semibold text-white">${esc(a.name)}</h3>
+                  <p class="truncate font-mono text-[11px] text-slate-500">${esc(a.agent_id)}</p>
+                </div>
+                ${flagged ? '<span class="rounded bg-pulse-rose/15 px-2 py-0.5 text-[10px] font-medium text-pulse-rose">Flagged</span>' : ""}
+              </div>
+              <p class="mt-2 text-sm text-slate-400 clamp2">${tags.length ? esc(tags.join(" · ")) : "No capability tags"}</p>
+              <div class="mt-2 flex flex-wrap items-center gap-x-3 gap-y-1 text-[11px] text-slate-500">
+                ${a.stars ? `<span>★ ${fmtStars(a.stars)}</span>` : ""}
+                ${a.active ? '<span class="text-emerald-400/80">Maintained</span>' : '<span>Dormant</span>'}
+                ${a.registration_source === "sdk" ? '<span class="text-pulse-violet">SDK</span>' : ""}
+                ${a.pushed_at ? `<span>Pushed ${relTime(a.pushed_at)}</span>` : ""}
+              </div>
+            </div>
           </div>
-          <div class="mt-3 flex flex-wrap gap-1.5">
-            ${tags.map(t => `<span class="rounded-md bg-white/[.05] px-2 py-0.5 text-[11px] text-slate-300 ring-1 ring-inset ring-white/10">${esc(t)}</span>`).join("")}
-          </div>
-          <div class="mt-3.5 flex items-center justify-between border-t divide-soft pt-3 text-[11px]">
-            <span class="inline-flex items-center gap-1 ${stars ? "text-amber-300" : "text-slate-600"} tabular-nums">
-              <svg class="h-3.5 w-3.5" viewBox="0 0 24 24" fill="currentColor"><path d="m12 2 3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01Z"/></svg>${fmtStars(a.stars)}
-            </span>
-            <span class="text-slate-500">${a.pushed_at ? "pushed " + relTime(a.pushed_at) : (a.capabilities_tags||[]).length + " tags"}</span>
+          <div class="mt-4 flex flex-wrap gap-2 border-t border-void-line pt-3">
+            <button class="btn-wire rounded-lg px-4 py-2 text-xs font-medium transition ${wired ? "bg-pulse-amber/15 text-pulse-amber ring-1 ring-pulse-amber/30" : "bg-pulse-cyan/15 text-pulse-cyan ring-1 ring-pulse-cyan/30 hover:bg-pulse-cyan/25"}" data-id="${esc(a.agent_id)}">
+              ${wired ? "⚡ Wired" : "⚡ Wire"}
+            </button>
+            <button class="btn-inspect rounded-lg border border-void-line px-4 py-2 text-xs text-slate-400 hover:text-white transition">Inspect</button>
+            <button class="btn-manifest rounded-lg border border-void-line px-3 py-2 text-xs text-slate-500 hover:text-slate-300 transition" title="Copy manifest">JSON</button>
           </div>
         </article>`;
     }
 
-    function render(list) {
-      loading.classList.add("hidden");
-      grid.innerHTML = list.map(card).join("");
-      empty.classList.toggle("hidden", list.length > 0);
+    function setModeActive(mode) {
+      document.querySelectorAll(".mode-btn").forEach((btn) => {
+        const on = btn.dataset.mode === mode;
+        btn.className = on
+          ? "mode-btn rounded-md px-3 py-1.5 font-medium text-pulse-cyan bg-pulse-cyan/10"
+          : "mode-btn rounded-md px-3 py-1.5 text-slate-400 hover:text-white";
+      });
+      document.querySelectorAll('[data-mode="search"]').forEach((el) => {
+        el.classList.toggle("hidden", !searching);
+      });
     }
 
-    // ---- Browse panel (framework + capability shortcuts -> search) ----
-    const FRAMEWORKS = [
-      { label: "MCP servers", q: "mcp server", icon: "🔌" },
-      { label: "CrewAI", q: "crewai", icon: "⛵" },
-      { label: "LangChain", q: "langchain", icon: "🦜" },
-      { label: "LangGraph", q: "langgraph", icon: "🕸️" },
-      { label: "ElizaOS", q: "elizaos", icon: "🤖" },
-      { label: "AutoGen", q: "autogen", icon: "⚙️" },
-    ];
-    const CAPABILITIES = ["web scraping", "trading bot", "pdf extraction", "rag", "voice", "browser automation", "code review", "data analysis"];
-
-    function renderBrowse() {
-      $("cats").innerHTML = FRAMEWORKS.map(f => `
-        <button data-q="${esc(f.q)}" class="surface surface-hover flex items-center gap-2.5 rounded-xl px-3.5 py-2.5 text-left text-sm text-slate-200">
-          <span class="text-base">${f.icon}</span><span class="font-medium">${esc(f.label)}</span>
-          <svg class="ml-auto h-3.5 w-3.5 text-slate-600" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="m9 18 6-6-6-6" stroke-linecap="round" stroke-linejoin="round"/></svg>
-        </button>`).join("");
-      $("caps").innerHTML = CAPABILITIES.map(c =>
-        `<button data-q="${esc(c)}" class="rounded-full border border-white/10 bg-white/[.03] px-3 py-1.5 text-xs text-slate-400 transition hover:border-iris-400/40 hover:text-white">${esc(c)}</button>`).join("");
-      const go = (e) => { const b = e.target.closest("button[data-q]"); if (b) { $("searchInput").value = b.dataset.q; search(b.dataset.q); } };
-      $("cats").addEventListener("click", go);
-      $("caps").addEventListener("click", go);
+    function setEcosystemActive(q) {
+      activeEcosystem = q || "";
+      document.querySelectorAll(".eco-filter").forEach((btn) => {
+        const on = btn.dataset.q === q;
+        btn.className = on
+          ? "eco-filter rounded-full border border-pulse-cyan/50 bg-pulse-cyan/15 px-3.5 py-1.5 text-xs font-medium text-pulse-cyan"
+          : "eco-filter rounded-full border border-void-line bg-void/60 px-3.5 py-1.5 text-xs text-slate-400 hover:border-pulse-cyan/40 hover:text-pulse-cyan transition";
+      });
     }
 
-    // ---- Fraud ----
-    function fraudCard(a, i) {
-      const fs = a.fraud_status || {}, tags = (a.capabilities_tags || []).slice(0, 4);
-      return `
-        <article class="animate-rise rounded-2xl border border-red-600/50 bg-red-950/25 p-4 shadow-[0_0_0_1px_rgba(220,38,38,.25)]" style="animation-delay:${i*22}ms">
-          <div class="flex items-center justify-between gap-2">
-            <span class="inline-flex items-center gap-1.5 rounded-md bg-red-600 px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide text-white animate-blink">🚨 Fraud detected</span>
-            <span class="text-[11px] font-semibold text-red-300 tabular-nums">${fs.strikes ?? 0} strikes</span>
-          </div>
-          <h4 class="clamp1 mt-3 font-semibold text-white">${esc(a.name)}</h4>
-          <div class="mt-2 rounded-lg border border-red-600/25 bg-red-950/40 p-2.5">
-            <div class="text-[10px] uppercase tracking-widest text-red-400/70">Reason</div>
-            <div class="mt-0.5 text-xs text-red-200">${esc(fs.reason || "Repeated fraud strikes")}</div>
-          </div>
-          <div class="mt-2.5 flex flex-wrap gap-1.5">${tags.map(t => `<span class="rounded-md bg-red-500/10 px-2 py-0.5 text-[11px] text-red-300/80 ring-1 ring-inset ring-red-500/20">${esc(t)}</span>`).join("")}</div>
-        </article>`;
-    }
-    function renderFraud(flagged) {
-      $("flaggedCount").textContent = (flagged || []).length;
-      if (!flagged || !flagged.length) { $("fraudGrid").innerHTML = ""; $("fraudClear").classList.remove("hidden"); return; }
-      $("fraudClear").classList.add("hidden");
-      $("fraudGrid").innerHTML = flagged.map(fraudCard).join("");
+    function showResultsToolbar(on) {
+      $("resultsToolbar").classList.toggle("hidden", !on);
+      $("resultsToolbar").classList.toggle("flex", on);
+      $("resultMetaHome").classList.toggle("hidden", on);
     }
 
-    // ---- Browse (paginated) ----
-    const PAGE_SIZE = 48;
-    let page = 0, totalCount = 0, sortMode = "top", searching = false;
+    function setResultMeta(text) {
+      $("resultMeta").textContent = text;
+      $("resultMetaHome").textContent = text;
+    }
 
-    function setStat(n) { totalCount = n; animateCount($("navCountNum"), n); animateCount($("footCount"), n); animateCount($("heroCount"), n); $("navCount").classList.remove("hidden"); }
+    function showLoading(on) {
+      $("loading").classList.toggle("hidden", !on);
+      if (on) { $("results").innerHTML = ""; $("empty").classList.add("hidden"); $("pager").classList.add("hidden"); }
+    }
+
+    function renderResults(list, meta) {
+      showLoading(false);
+      setResultMeta(meta);
+      showResultsToolbar(true);
+      if (!list.length) { $("empty").classList.remove("hidden"); return; }
+      $("empty").classList.add("hidden");
+      $("results").innerHTML = list.map(nodeCard).join("");
+    }
+
     function renderPager() {
       const pages = Math.max(1, Math.ceil(totalCount / PAGE_SIZE));
-      $("pageInfo").textContent = `Page ${page + 1} of ${pages.toLocaleString()}`;
-      $("prevBtn").disabled = page <= 0; $("nextBtn").disabled = page >= pages - 1;
-      $("pager").classList.remove("hidden"); $("pager").classList.add("flex");
+      $("pageInfo").textContent = `Page ${page + 1} / ${pages.toLocaleString()}`;
+      $("prevBtn").disabled = page <= 0;
+      $("nextBtn").disabled = page >= pages - 1;
+      $("pager").classList.remove("hidden");
+      $("pager").classList.add("flex");
+    }
+
+    function setStats(lb) {
+      const prev = totalCount;
+      totalCount = lb.total_count || 0;
+      animateCount($("liveCount"), totalCount);
+      animateCount($("statTotal"), totalCount);
+      if (lb.active_agents_90d != null) {
+        animateCount($("statHealthy"), lb.active_agents_90d);
+      }
+      if (totalCount > prev && prev > 0) {
+        $("statLiveDot").classList.add("animate-ping");
+        setTimeout(() => $("statLiveDot").classList.remove("animate-ping"), 2000);
+      }
     }
 
     async function loadBrowse() {
       searching = false;
-      const titles = { recent: "Recently indexed", health: "Healthiest agents", top: "Top agents" };
-      const subs = {
-        recent: "Newest agents in the index",
-        health: "Actively maintained — freshness over raw stars",
-        top: "Ranked by reputation & GitHub stars",
-      };
-      sectionTitle.textContent = titles[sortMode] || titles.top;
-      sectionSub.textContent = subs[sortMode] || subs.top;
-      resetBtn.classList.add("hidden");
-      loading.classList.remove("hidden");
+      currentQuery = "";
+      setModeActive(browseMode);
+      showLoading(true);
+      const t0 = performance.now();
       try {
-        const [lb, list] = await Promise.all([
-          fetch(`${API}/api/v1/leaderboard?limit=1`).then(r => r.json()),
-          fetch(`${API}/api/v1/agents?sort=${sortMode}&limit=${PAGE_SIZE}`).then(r => r.json()).catch(() => null),
-        ]);
-        setStat(lb.total_count || 0);
-        renderFraud(lb.flagged_agents || []);
-        // "Top" uses paginated leaderboard; "Recent" uses the agents feed (page 0 only).
-        if (sortMode === "top") {
-          const pg = await fetch(`${API}/api/v1/leaderboard?limit=${PAGE_SIZE}&offset=${page * PAGE_SIZE}`).then(r => r.json());
-          render(pg.leaderboard || []);
+        const lb = await fetch(`${API}/api/v1/leaderboard?limit=1`).then((r) => r.json());
+        setStats(lb);
+        let list = [];
+        if (browseMode === "top") {
+          const pg = await fetch(`${API}/api/v1/leaderboard?limit=${PAGE_SIZE}&offset=${page * PAGE_SIZE}`).then((r) => r.json());
+          list = pg.leaderboard || [];
           renderPager();
         } else {
-          render((list && list.agents) || []);
+          const d = await fetch(`${API}/api/v1/agents?sort=${browseMode}&limit=${PAGE_SIZE}`).then((r) => r.json());
+          list = d.agents || [];
           $("pager").classList.add("hidden");
         }
-      } catch { loading.textContent = "Could not reach the registry."; }
-    }
-    function goPage(delta) {
-      const pages = Math.max(1, Math.ceil(totalCount / PAGE_SIZE));
-      const next = Math.min(Math.max(0, page + delta), pages - 1);
-      if (next === page) return; page = next; loadBrowse(); window.scrollTo({ top: 0, behavior: "smooth" });
+        const ms = ((performance.now() - t0) / 1000).toFixed(2);
+        const label = { top: "top agents", health: "healthiest agents", recent: "newest agents" }[browseMode];
+        renderResults(list, `${list.length} ${label} · ${totalCount.toLocaleString()} indexed · ${ms}s`);
+        $("heroSection").classList.add("hidden");
+      } catch {
+        showLoading(false);
+        $("empty").classList.remove("hidden");
+        setResultMeta("Registry unreachable");
+      }
     }
 
     async function search(q) {
-      if (!q.trim()) { page = 0; return loadBrowse(); }
+      q = (q || "").trim();
+      if (!q) {
+        $("heroSection").classList.remove("hidden");
+        $("results").innerHTML = "";
+        setResultMeta("Search or browse the index");
+        showResultsToolbar(false);
+        setEcosystemActive("");
+        return;
+      }
       searching = true;
-      sectionTitle.textContent = `Results for “${q}”`; sectionSub.textContent = "Matched by capability";
-      resetBtn.classList.remove("hidden"); $("pager").classList.add("hidden");
-      loading.classList.remove("hidden"); grid.innerHTML = ""; empty.classList.add("hidden");
+      currentQuery = q;
+      $("searchInput").value = q;
+      setModeActive("search");
+      showLoading(true);
+      const t0 = performance.now();
       try {
-        const d = await fetch(`${API}/api/v1/discover`, { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ query: q, limit: 48 }) }).then(r => r.json());
-        render(d.results || []);
-      } catch { loading.textContent = "Search failed. Try again."; }
+        const d = await fetch(`${API}/api/v1/discover`, {
+          method: "POST",
+          headers: { "content-type": "application/json" },
+          body: JSON.stringify({ query: q, limit: PAGE_SIZE }),
+        }).then((r) => r.json());
+        const list = d.results || [];
+        const ms = ((performance.now() - t0) / 1000).toFixed(2);
+        renderResults(list, `${d.count ?? list.length} matches for "${q}" · ${ms}s${d.semantic_expanded ? " · semantic" : ""}`);
+        $("pager").classList.add("hidden");
+        $("heroSection").classList.add("hidden");
+        try { sessionStorage.setItem("beacon:lastQ", q); } catch {}
+      } catch {
+        showLoading(false);
+        setResultMeta("Search failed");
+        $("empty").classList.remove("hidden");
+      }
     }
 
-    // Wiring
+    function exportStack() {
+      const manifest = {
+        beacon_stack: "1.0",
+        created: new Date().toISOString(),
+        agents: dock,
+        mcp_install: "BEACON_REGISTRY_URL=http://34.45.7.252:8000 npx -y beacon-mcp",
+      };
+      navigator.clipboard?.writeText(JSON.stringify(manifest, null, 2));
+      toast("Stack manifest copied");
+    }
+
+    function parseAgentFromEl(el) {
+      try { return JSON.parse(el.closest("[data-agent]")?.dataset.agent || "null"); } catch { return null; }
+    }
+
+    // Events
     $("searchForm").addEventListener("submit", (e) => { e.preventDefault(); search($("searchInput").value); });
-    resetBtn.addEventListener("click", () => { $("searchInput").value = ""; page = 0; loadBrowse(); });
-    $("prevBtn").addEventListener("click", () => goPage(-1));
-    $("nextBtn").addEventListener("click", () => goPage(1));
-    $("sortToggle").addEventListener("click", (e) => {
-      const b = e.target.closest("button[data-sort]"); if (!b || searching) return;
-      sortMode = b.dataset.sort; page = 0;
-      [...$("sortToggle").children].forEach(x => { const on = x === b; x.className = `rounded-md px-3 py-1.5 transition ${on ? "font-medium text-white bg-white/10" : "text-slate-400 hover:text-white"}`; });
-      loadBrowse();
+    $("searchInput").addEventListener("input", (e) => {
+      clearTimeout(debounceTimer);
+      const v = e.target.value;
+      if (!v.trim()) { $("heroSection").classList.remove("hidden"); return; }
+      debounceTimer = setTimeout(() => search(v), 400);
     });
-    $("copyMcp").addEventListener("click", () => { navigator.clipboard?.writeText("npx -y beacon-mcp"); $("copyMcp").textContent = "Copied ✓"; setTimeout(() => $("copyMcp").textContent = "Copy", 1500); });
+    $("btnHome").addEventListener("click", () => {
+      $("searchInput").value = "";
+      searching = false;
+      page = 0;
+      setEcosystemActive("");
+      $("heroSection").classList.remove("hidden");
+      $("results").innerHTML = "";
+      setResultMeta("Search or browse the index");
+      showResultsToolbar(false);
+      $("searchInput").focus();
+    });
+    $("prevBtn").addEventListener("click", () => { page = Math.max(0, page - 1); loadBrowse(); });
+    $("nextBtn").addEventListener("click", () => { page++; loadBrowse(); });
 
-    const chips = ["mcp server", "web scraping", "pdf extraction", "trading bot", "multi-agent", "rag"];
-    $("chips").innerHTML = chips.map(c => `<button class="rounded-full border border-white/10 bg-white/[.03] px-3 py-1.5 text-slate-400 transition hover:border-iris-400/40 hover:text-white">${c}</button>`).join("");
-    $("chips").addEventListener("click", (e) => { if (e.target.tagName === "BUTTON") { $("searchInput").value = e.target.textContent; search(e.target.textContent); } });
+    function wireBrowseFilters(root) {
+      root.addEventListener("click", (e) => {
+        const b = e.target.closest(".mode-btn");
+        if (!b || b.dataset.mode === "search") return;
+        browseMode = b.dataset.mode;
+        page = 0;
+        $("searchInput").value = "";
+        setEcosystemActive("");
+        loadBrowse();
+      });
+    }
+    wireBrowseFilters($("browseFilters"));
+    wireBrowseFilters($("browseFiltersResults"));
 
-    // init sort toggle active state
-    [...$("sortToggle").children][0].className = "rounded-md px-3 py-1.5 font-medium text-white bg-white/10 transition";
-    renderBrowse();
-    loadBrowse();
+    function wireChipFilters(root, selector) {
+      root.addEventListener("click", (e) => {
+        const b = e.target.closest(selector);
+        if (!b) return;
+        const q = b.dataset.q;
+        $("searchInput").value = q;
+        setEcosystemActive(q);
+        search(q);
+      });
+    }
+
+    $("results").addEventListener("click", (e) => {
+      const card = e.target.closest("[data-agent]");
+      if (!card) return;
+      const a = parseAgentFromEl(e.target);
+      if (!a) return;
+      if (e.target.closest(".btn-wire")) wireAgent(a);
+      else if (e.target.closest(".btn-inspect")) inspect(a);
+      else if (e.target.closest(".btn-manifest")) { navigator.clipboard?.writeText(JSON.stringify(agentManifest(a), null, 2)); toast("Manifest copied"); }
+      else inspect(a);
+    });
+
+    $("dockList").addEventListener("click", (e) => {
+      if (e.target.closest(".remove-dock")) { removeFromDock(e.target.closest(".remove-dock").dataset.id); return; }
+      const row = e.target.closest("[data-dock-id]");
+      if (row) inspectRaw(dock.find((d) => d.agent_id === row.dataset.dockId));
+    });
+
+    $("btnWirePrimary").addEventListener("click", () => { if (selectedAgent) wireAgent({ ...selectedAgent, capabilities_tags: selectedAgent.capabilities || selectedAgent.capabilities_tags }); });
+    $("btnCopyMcp").addEventListener("click", () => { if (selectedAgent) { navigator.clipboard?.writeText(mcpSnippet(selectedAgent)); toast("MCP snippet copied"); } });
+    $("btnCopyManifest").addEventListener("click", () => { if (selectedAgent) { navigator.clipboard?.writeText(JSON.stringify(agentManifest(selectedAgent), null, 2)); toast("Manifest copied"); } });
+    $("btnExportStack").addEventListener("click", exportStack);
+    $("btnClearDock").addEventListener("click", () => { dock = []; saveDock(); hideInspector(); toast("Dock cleared"); });
+    $("copyEditorMcp").addEventListener("click", () => {
+      navigator.clipboard?.writeText("BEACON_REGISTRY_URL=http://34.45.7.252:8000 npx -y beacon-mcp");
+      toast("Command copied");
+    });
+
+    document.addEventListener("click", (e) => { if (e.target.classList.contains("suggest-q")) search(e.target.textContent); });
+
+    document.addEventListener("keydown", (e) => {
+      if (e.key === "/" && document.activeElement.tagName !== "INPUT") { e.preventDefault(); $("searchInput").focus(); }
+      if (e.key === "Escape") hideInspector();
+    });
+
+    $("ecosystemFilters").innerHTML = ECOSYSTEMS.map(({ q, label }) =>
+      `<button type="button" data-q="${esc(q)}" class="eco-filter rounded-full border border-void-line bg-void/60 px-3.5 py-1.5 text-xs text-slate-400 hover:border-pulse-cyan/40 hover:text-pulse-cyan transition">${esc(label)}</button>`
+    ).join("");
+    $("trendingTags").innerHTML = TRENDING.map((q) =>
+      `<button type="button" data-q="${esc(q)}" class="cap-filter rounded-full border border-void-line bg-void/60 px-3.5 py-1.5 text-xs text-slate-400 hover:border-pulse-violet/40 hover:text-pulse-violet transition">${esc(q)}</button>`
+    ).join("");
+    wireChipFilters($("ecosystemFilters"), ".eco-filter");
+    wireChipFilters($("trendingTags"), ".cap-filter");
+
+    // Init
+    loadDock();
+    (async () => {
+      await refreshRegistryCount();
+      try {
+        const last = sessionStorage.getItem("beacon:lastQ");
+        if (last) $("searchInput").value = last;
+      } catch {}
+      setInterval(refreshRegistryCount, COUNT_POLL_MS);
+    })();
   </script>
 </body>
 </html>

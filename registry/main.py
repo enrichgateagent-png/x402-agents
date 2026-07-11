@@ -2,9 +2,8 @@
 Beacon — Central Discovery & Reputation Server for autonomous AI agents.
 
 Google indexes websites so humans can find them; Beacon indexes agents so agents
-can find each other. FastAPI service backed by Turso (managed libSQL/SQLite) over
-its HTTP API, so it runs anywhere — including serverless (Vercel) — with durable
-storage and no local disk.
+can find each other. FastAPI service backed by a local SQLite database (WAL mode)
+running directly on the production VM for zero-latency, zero-cost storage.
 
 Agents self-register on boot, are discovered by capability, and report job
 telemetry that continuously updates their reputation (success_rate).
@@ -14,8 +13,11 @@ from __future__ import annotations
 
 import os
 import re
+import time
+from collections import Counter
 from datetime import datetime, timezone
 from typing import Optional
+from urllib.parse import quote
 
 import html
 import math
@@ -26,12 +28,20 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse, Response
 from pydantic import AliasChoices, BaseModel, Field, field_validator
 
+import analytics
 import turso
 
 import logging
 
-PUBLIC_BASE_URL = os.environ.get("PUBLIC_BASE_URL", "https://registry-ruby.vercel.app").rstrip("/")
+PUBLIC_BASE_URL = os.environ.get("PUBLIC_BASE_URL", "http://34.45.7.252:8000").rstrip("/")
 PORTAL_URL = os.environ.get("PORTAL_URL", "https://portal-five-phi-54.vercel.app").rstrip("/")
+MCP_SSE_URL = os.environ.get("MCP_SSE_URL", "http://34.45.7.252:8001/sse").rstrip("/")
+
+_TAG_CACHE_TTL_SECS = int(os.environ.get("TAG_CACHE_TTL_SECS", "3600"))
+_FTS_TOKEN = re.compile(r"[\w\-]+", re.UNICODE)
+
+# In-memory top-tags cache — warmed on startup, refreshed hourly.
+_tag_cache: dict = {"tags": [], "categories": [], "built_at": None, "total_agents": 0}
 
 logging.basicConfig(level=logging.INFO, format="%(levelname)s %(message)s")
 logger = logging.getLogger("beacon")
@@ -61,6 +71,8 @@ MAX_DISCOVER_RESULTS = int(os.environ.get("REGISTRY_MAX_RESULTS", "25"))
 
 _TAG_SPLIT = re.compile(r"[,\s]+")
 _schema_ready = False
+_active_cache: dict = {"count": 0, "at": 0.0}
+_ACTIVE_CACHE_TTL = int(os.environ.get("ACTIVE_COUNT_CACHE_TTL", "120"))
 
 
 def _utcnow() -> datetime:
@@ -71,7 +83,19 @@ def _ensure_ready() -> None:
     global _schema_ready
     if not _schema_ready:
         turso.ensure_schema()
+        analytics.ensure_analytics_schema()
+        _refresh_tag_cache(force=True)
         _schema_ready = True
+
+
+def _active_agents_count() -> int:
+    now = time.time()
+    if now - _active_cache["at"] < _ACTIVE_CACHE_TTL:
+        return int(_active_cache["count"])
+    n = analytics.count_active_agents(_pushed_recently)
+    _active_cache["count"] = n
+    _active_cache["at"] = now
+    return n
 
 
 def _normalize_tags(raw: str) -> str:
@@ -164,6 +188,133 @@ def _row_to_public(row: dict) -> dict:
             "strikes": int(row.get("fraud_strikes", 0) or 0),
             "reason": row.get("fraud_reason"),
         },
+    }
+
+
+# --------------------------------------------------------------------------- #
+# Discovery cache & FTS search helpers
+# --------------------------------------------------------------------------- #
+
+_ECOSYSTEM_CATEGORIES: list[tuple[str, list[str]]] = [
+    ("mcp", ["mcp", "mcp-server", "model-context-protocol", "mcp-tool", "open-mcp"]),
+    ("langchain", ["langchain", "langchain-agent", "langgraph", "langgraph-agent"]),
+    ("crewai", ["crewai", "crewai-agent", "crewai-tool"]),
+    ("autogen", ["autogen", "autogen-agent"]),
+    ("elizaos", ["elizaos", "eliza-plugin", "eliza"]),
+    ("rag", ["rag", "rag-agent", "retrieval", "llamaindex", "llamaindex-agent"]),
+    ("automation", ["automation", "workflow", "n8n", "ipaas"]),
+    ("trading", ["trading-bot", "crypto-bot", "solana-agent", "defi"]),
+]
+
+
+def _refresh_tag_cache(force: bool = False) -> None:
+    """Aggregate top tags once — served from memory for instant /discovery responses."""
+    global _tag_cache
+    built = _tag_cache.get("built_at")
+    if not force and built and (time.time() - built) < _TAG_CACHE_TTL_SECS:
+        return
+
+    rows = turso.execute(
+        "SELECT capabilities_tags FROM agents WHERE is_fraudulent = 0 AND capabilities_tags != ''"
+    )
+    counter: Counter[str] = Counter()
+    for row in rows:
+        for tag in (row.get("capabilities_tags") or "").split(","):
+            tag = tag.strip().lower()
+            if len(tag) >= 2:
+                counter[tag] += 1
+
+    top_tags = [{"tag": t, "count": c} for t, c in counter.most_common(20)]
+
+    cat_counts: Counter[str] = Counter()
+    tag_set = set(counter.keys())
+    for cat_name, aliases in _ECOSYSTEM_CATEGORIES:
+        total = sum(counter.get(a, 0) for a in aliases if a in tag_set)
+        for a in aliases:
+            if a in counter:
+                total = max(total, counter[a])
+        # also count agents whose tags contain the category keyword as substring
+        for tag, cnt in counter.items():
+            if cat_name in tag or any(a in tag for a in aliases):
+                total += cnt
+        if total:
+            cat_counts[cat_name] = total
+
+    categories = [{"category": k, "count": v} for k, v in cat_counts.most_common(20)]
+    total_agents = turso.execute("SELECT COUNT(*) AS c FROM agents")[0]["c"]
+
+    _tag_cache = {
+        "tags": top_tags,
+        "categories": categories,
+        "built_at": time.time(),
+        "total_agents": int(total_agents),
+    }
+    logger.info("tag cache refreshed — %d tags, %d agents", len(top_tags), total_agents)
+
+
+def _fts_query(raw: str) -> str:
+    """Build a safe FTS5 OR query with prefix matching for fuzzy discovery."""
+    tokens = _FTS_TOKEN.findall((raw or "").lower())
+    if not tokens:
+        return ""
+    parts: list[str] = []
+    for tok in tokens[:10]:
+        safe = tok.replace('"', "")
+        if len(safe) < 2:
+            continue
+        parts.append(f'"{safe}"*' if len(safe) >= 3 else f'"{safe}"')
+    return " OR ".join(parts) if parts else ""
+
+
+def _agent_install_manifest(agent_id: str, pub: dict) -> dict:
+    """Wire/install commands and schema for agent clients."""
+    q = quote(agent_id, safe="")
+    badge_url = f"{PUBLIC_BASE_URL}/api/v1/agents/{q}/badge.svg"
+    caps = pub.get("capabilities_tags") or []
+    discover_query = " ".join(caps[:3]) if caps else pub.get("name", "")
+    return {
+        "mcp_npx": f"BEACON_REGISTRY_URL={PUBLIC_BASE_URL} npx -y beacon-mcp",
+        "mcp_sse": MCP_SSE_URL,
+        "discover_api": {
+            "method": "POST",
+            "url": f"{PUBLIC_BASE_URL}/api/v1/discover",
+            "body": {"query": discover_query, "limit": 10},
+        },
+        "search_api": {
+            "method": "GET",
+            "url": f"{PUBLIC_BASE_URL}/api/v1/search",
+            "params": {"q": discover_query, "limit": 10},
+        },
+        "badge_url": badge_url,
+        "badge_markdown": f"![Beacon Verified]({badge_url})",
+        "cursor_rules": f"{PUBLIC_BASE_URL}/beacon.cursorrules",
+        "llms_txt": f"{PUBLIC_BASE_URL}/llms.txt",
+    }
+
+
+def _agent_schema() -> dict:
+    return {
+        "agent_id": "string — unique slug (e.g. owner/repo)",
+        "name": "string — display name",
+        "mcp_endpoint": "string — URL or repo link",
+        "capabilities_tags": "string[] — searchable capability tags",
+        "stars": "integer — GitHub stars (scraped repos)",
+        "health_score": "integer 0-100 — maintenance composite",
+        "active": "boolean — pushed within 90 days",
+        "success_rate": "float 0-1 — telemetry reputation",
+        "online": "boolean — recently seen + reachable",
+        "registration_source": "sdk | scraper",
+        "fraud_status": "{ is_flagged, strikes, reason }",
+    }
+
+
+def _agent_detail(row: dict) -> dict:
+    pub = _row_to_public(row)
+    return {
+        "ok": True,
+        "agent": pub,
+        "install": _agent_install_manifest(pub["agent_id"], pub),
+        "schema": _agent_schema(),
     }
 
 
@@ -294,6 +445,23 @@ app.add_middleware(
 )
 
 
+@app.middleware("http")
+async def _access_log_middleware(request: Request, call_next):
+    ua = request.headers.get("user-agent") or ""
+    client_class = _classify_client(ua)
+    response = await call_next(request)
+    try:
+        analytics.log_request(request, client_class)
+    except Exception:
+        pass
+    return response
+
+
+@app.on_event("startup")
+def _on_startup() -> None:
+    _ensure_ready()
+
+
 @app.exception_handler(turso.TursoError)
 async def _turso_err(request: Request, exc: turso.TursoError) -> JSONResponse:
     return JSONResponse(status_code=503, content={"ok": False, "error": "storage_unavailable", "detail": str(exc)})
@@ -306,6 +474,10 @@ def root() -> dict:
         "tagline": "Google indexes websites for humans; Beacon indexes agents for agents.",
         "version": "1.0.0",
         "endpoints": [
+            "GET  /api/v1/search",
+            "GET  /api/v1/discovery",
+            "GET  /api/v1/agents/{agent_id}",
+            "GET  /api/v1/health",
             "POST /api/v1/register",
             "POST /api/v1/discover",
             "POST /api/v1/telemetry",
@@ -408,7 +580,226 @@ Portal: {PORTAL_URL}
 def healthz() -> dict:
     _ensure_ready()
     rows = turso.execute("SELECT COUNT(*) AS c FROM agents")
-    return {"ok": True, "agents": int(rows[0]["c"]) if rows else 0, "time": _utcnow().isoformat()}
+    return {
+        "ok": True,
+        "agents": int(rows[0]["c"]) if rows else 0,
+        "storage": "sqlite",
+        "time": _utcnow().isoformat(),
+    }
+
+
+@app.get("/api/v1/health")
+def api_health() -> dict:
+    """
+    Lightweight health + live totals for frontend polling (every 30s).
+    Single COUNT(*) — sub-millisecond on indexed SQLite WAL.
+    """
+    _ensure_ready()
+    t0 = time.perf_counter()
+    total = int(turso.execute("SELECT COUNT(*) AS c FROM agents")[0]["c"])
+    scraped = turso.execute(
+        "SELECT COUNT(*) AS c FROM agents WHERE registration_source = 'scraper'"
+    )
+    organic = turso.execute(
+        "SELECT COUNT(*) AS c FROM agents WHERE registration_source = 'sdk'"
+    )
+    flagged = turso.execute(
+        "SELECT COUNT(*) AS c FROM agents WHERE is_fraudulent = 1"
+    )
+    active = _active_agents_count()
+    ms = round((time.perf_counter() - t0) * 1000, 2)
+    return {
+        "ok": True,
+        "status": "healthy",
+        "storage": "sqlite",
+        "storage_path": turso.DB_PATH,
+        "total_agents": total,
+        "active_agents_90d": active,
+        "scraped_registrations": int(scraped[0]["c"]) if scraped else 0,
+        "organic_sdk_registrations": int(organic[0]["c"]) if organic else 0,
+        "flagged_count": int(flagged[0]["c"]) if flagged else 0,
+        "query_ms": ms,
+        "timestamp": _utcnow().isoformat(),
+    }
+
+
+@app.get("/api/admin/analytics-details")
+def admin_analytics_details(request: Request) -> dict:
+    """Password-protected traffic and registry analytics (not for public UI)."""
+    if not analytics.verify_admin(request):
+        raise HTTPException(status_code=401, detail="Unauthorized — set ADMIN_SECRET_PASSWORD on the VM")
+    _ensure_ready()
+    return analytics.get_admin_analytics(_pushed_recently)
+
+
+@app.get("/api/v1/search")
+def search_agents(
+    q: str,
+    limit: int = 20,
+    offset: int = 0,
+    category: Optional[str] = None,
+    include_total: bool = False,
+) -> dict:
+    """
+    Full-text search across name, mcp_endpoint (github URL), and capability tags.
+    Uses FTS5 with prefix matching; falls back to indexed LIKE for edge cases.
+    Set include_total=true only when paginating — skips an extra COUNT for speed.
+    """
+    _ensure_ready()
+    q = (q or "").strip()
+    if not q:
+        raise HTTPException(status_code=400, detail="query parameter 'q' is required")
+
+    limit = max(1, min(limit, 100))
+    offset = max(0, offset)
+    category = (category or "").strip().lower() or None
+    t0 = time.perf_counter()
+
+    fts_q = _fts_query(q)
+    results: list[dict] = []
+    total = 0
+
+    if fts_q:
+        try:
+            cat_clause = ""
+            args: list = [fts_q]
+            if category:
+                cat_clause = " AND (',' || a.capabilities_tags || ',') LIKE ?"
+                args.append(f"%,{category},%")
+            args.extend([limit, offset])
+
+            rows = turso.execute(
+                f"""
+                SELECT a.*, bm25(agents_fts) AS rank
+                  FROM agents_fts
+                  JOIN agents a ON a.rowid = agents_fts.rowid
+                 WHERE agents_fts MATCH ?
+                   AND a.is_fraudulent = 0
+                   {cat_clause}
+                 ORDER BY rank, a.stars DESC, a.success_rate DESC
+                 LIMIT ? OFFSET ?
+                """,
+                args,
+            )
+            results = [_row_to_public(r) for r in rows]
+
+            if include_total:
+                count_args: list = [fts_q]
+                if category:
+                    count_args.append(f"%,{category},%")
+                count_row = turso.execute(
+                    f"""
+                    SELECT COUNT(*) AS c
+                      FROM agents_fts
+                      JOIN agents a ON a.rowid = agents_fts.rowid
+                     WHERE agents_fts MATCH ?
+                       AND a.is_fraudulent = 0
+                       {cat_clause}
+                    """,
+                    count_args,
+                )
+                total = int(count_row[0]["c"]) if count_row else len(results)
+            else:
+                total = len(results)
+        except turso.TursoError:
+            fts_q = ""
+
+    if not fts_q or not results:
+        like = f"%{q.lower()}%"
+        cat_clause = ""
+        args = [like, like, like, like]
+        if category:
+            cat_clause = " AND (',' || capabilities_tags || ',') LIKE ?"
+            args.append(f"%,{category},%")
+        args.extend([limit, offset])
+
+        rows = turso.execute(
+            f"""
+            SELECT * FROM agents
+             WHERE is_fraudulent = 0
+               AND (
+                    LOWER(name) LIKE ?
+                 OR LOWER(agent_id) LIKE ?
+                 OR LOWER(mcp_endpoint) LIKE ?
+                 OR LOWER(capabilities_tags) LIKE ?
+               )
+               {cat_clause}
+             ORDER BY stars DESC, success_rate DESC
+             LIMIT ? OFFSET ?
+            """,
+            args,
+        )
+        results = [_row_to_public(r) for r in rows]
+
+        if include_total:
+            count_args = [like, like, like, like]
+            if category:
+                count_args.append(f"%,{category},%")
+            count_row = turso.execute(
+                f"""
+                SELECT COUNT(*) AS c FROM agents
+                 WHERE is_fraudulent = 0
+                   AND (
+                        LOWER(name) LIKE ?
+                     OR LOWER(agent_id) LIKE ?
+                     OR LOWER(mcp_endpoint) LIKE ?
+                     OR LOWER(capabilities_tags) LIKE ?
+                   )
+                   {cat_clause}
+                """,
+                count_args,
+            )
+            total = int(count_row[0]["c"]) if count_row else len(results)
+        else:
+            total = len(results)
+
+    ms = round((time.perf_counter() - t0) * 1000, 2)
+    return {
+        "ok": True,
+        "query": q,
+        "category": category,
+        "count": len(results),
+        "total": total,
+        "limit": limit,
+        "offset": offset,
+        "query_ms": ms,
+        "results": results,
+    }
+
+
+@app.get("/api/v1/discovery")
+def discovery_tags() -> dict:
+    """
+    Top tags & ecosystem categories — served from in-memory cache (refreshed hourly).
+    No per-request GROUP BY over 17k+ rows.
+    """
+    _ensure_ready()
+    _refresh_tag_cache()
+    return {
+        "ok": True,
+        "total_agents": _tag_cache["total_agents"],
+        "tags": _tag_cache["tags"],
+        "categories": _tag_cache["categories"],
+        "cached_at": datetime.fromtimestamp(_tag_cache["built_at"], tz=timezone.utc).isoformat()
+        if _tag_cache.get("built_at")
+        else None,
+        "cache_ttl_secs": _TAG_CACHE_TTL_SECS,
+    }
+
+
+@app.get("/api/v1/agents/{agent_id:path}")
+def get_agent(agent_id: str) -> dict:
+    """
+    Full agent profile + install manifest + metadata schema.
+    """
+    _ensure_ready()
+    if agent_id.endswith("/badge.svg"):
+        raise HTTPException(status_code=404, detail="use /api/v1/agents/{id}/badge.svg")
+
+    rows = turso.execute("SELECT * FROM agents WHERE agent_id = ?", [agent_id])
+    if not rows:
+        raise HTTPException(status_code=404, detail=f"agent '{agent_id}' not found")
+    return _agent_detail(rows[0])
 
 
 @app.post("/api/v1/register")

@@ -1,9 +1,6 @@
-"""Vercel serverless entrypoint — exposes the FastAPI app as an ASGI function."""
-import os
-import sys
+"""
+DEPRECATED — Registry runs on GCP VM with local SQLite.
 
-sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
-
-from main import app  # noqa: E402
-
-# Vercel's Python runtime detects the ASGI `app` object.
+This file is kept only so older Vercel project layouts do not break deploys.
+All traffic is proxied to the VM via vercel.json rewrites — no Turso, no libSQL.
+"""

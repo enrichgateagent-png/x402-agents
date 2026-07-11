@@ -4,7 +4,7 @@ import { TwitterApi } from "twitter-api-v2";
 
 process.loadEnvFile(new URL("../.env", import.meta.url).pathname);
 
-const REGISTRY = (process.env.REGISTRY_URL ?? "https://registry-ruby.vercel.app").replace(/\/$/, "");
+const REGISTRY = (process.env.REGISTRY_URL ?? "http://34.45.7.252:8000").replace(/\/$/, "");
 const PORTAL = process.env.PORTAL_URL ?? "https://portal-five-phi-54.vercel.app";
 const MODE = process.argv[2] ?? "launch";
 

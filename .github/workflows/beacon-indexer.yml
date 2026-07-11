@@ -1,10 +1,8 @@
 name: Beacon Indexer
 
-# Zero-cost continuous harvesting on GitHub's free Actions runners.
+# Harvester runs on the GCP VM only — do NOT schedule on GitHub Actions (was hitting Turso via Vercel).
 on:
-  schedule:
-    - cron: "17 */4 * * *"   # every 4 hours (public repo = unlimited Actions); :17 avoids the cron rush
-  workflow_dispatch: {}       # allow manual runs from the Actions tab
+  workflow_dispatch: {}
 
 concurrency:
   group: beacon-indexer
@@ -31,7 +29,7 @@ jobs:
           # The workflow's built-in token lifts GitHub API limits to 5000/hr.
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           # Override if your registry URL changes; secret takes precedence.
-          REGISTRY_URL: ${{ secrets.REGISTRY_URL || 'https://registry-ruby.vercel.app' }}
+          REGISTRY_URL: ${{ secrets.REGISTRY_URL || 'http://34.45.7.252:8000' }}
           MAX_PAGES: "10"
           MAX_PER_QUERY: "1000"
           THROTTLE_SECS: "1"
@@ -43,7 +41,7 @@ jobs:
         # a transient validator hiccup.
         continue-on-error: true
         env:
-          REGISTRY_URL: ${{ secrets.REGISTRY_URL || 'https://registry-ruby.vercel.app' }}
+          REGISTRY_URL: ${{ secrets.REGISTRY_URL || 'http://34.45.7.252:8000' }}
         run: |
           echo "Triggering batch validation..."
           curl -sS -X POST "${REGISTRY_URL%/}/api/v1/validate?limit=100" \

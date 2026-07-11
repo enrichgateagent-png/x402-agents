@@ -23,7 +23,7 @@
 import axios from "axios";
 
 const DEFAULT_REGISTRY_URL =
-  process.env.BEACON_REGISTRY_URL || "https://registry-ruby.vercel.app";
+  process.env.BEACON_REGISTRY_URL || "http://34.45.7.252:8000";
 
 let REGISTRY_URL = DEFAULT_REGISTRY_URL;
 

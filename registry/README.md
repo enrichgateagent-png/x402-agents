@@ -19,7 +19,7 @@ so agents don't just get found, they get **ranked by proven success**.
 
 | Component | File | Role |
 |---|---|---|
-| Central server | [`main.py`](main.py) | FastAPI registry & reputation engine (Turso/libSQL storage) |
+| Central server | [`main.py`](main.py) | FastAPI registry & reputation engine (local SQLite, WAL mode) |
 | Client SDK | [`beacon_sdk.py`](beacon_sdk.py) | Drop-in `BeaconClient` — auto-register, telemetry, discovery |
 | Example agent | [`agent_app.py`](agent_app.py) | Reference integration |
 
@@ -57,13 +57,29 @@ synchronous and returns `[]` on failure.
 ## Run locally
 
 ```bash
+cp .env.example .env   # set SQLITE_DB_PATH
 pip install -r requirements.txt
 uvicorn main:app --reload --port 8000
 # in another shell:
 REGISTRY_URL=http://127.0.0.1:8000 python agent_app.py
 ```
 
-## Deploy (Render / Railway)
+## Deploy (GCP Ubuntu VM)
+
+```bash
+# 1. Export Turso data (run locally before losing access)
+bash scripts/export_turso_backup.sh
+
+# 2. Upload backup + deploy on VM
+scp data_backup.sql gcp_user@YOUR_GCP_VM_IP:~/
+ssh gcp_user@YOUR_GCP_VM_IP
+export GCP_VM_IP=YOUR_GCP_VM_IP
+bash scripts/gcp_deploy.sh
+```
+
+Glama remote SSE (no hosted credits): `http://YOUR_GCP_VM_IP:8001/sse`
+
+## Deploy (Render / Railway) — legacy
 
 - **Render:** push this folder; [`render.yaml`](render.yaml) provisions the web
   service + a 1GB persistent disk mounted at `/var/data` for the SQLite file.

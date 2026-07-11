@@ -10,7 +10,11 @@ Purpose: solve the registry's cold-start problem by seeding it with thousands of
 genuine open-source agents/tools that developers can already discover.
 
 Env:
-  REGISTRY_URL   Beacon base URL (default: https://registry-ruby.vercel.app)
+  REGISTRY_URL   Beacon base URL (default: http://34.45.7.252:8000)
+  SQLITE_DB_PATH optional — when set (or turso.py is importable), the indexer
+                 preloads all known agent_id / mcp_endpoint values into
+                 scraped_nodes_cache (in-memory set) on startup so already-indexed
+                 repos skip the register API entirely (zero per-repo DB writes).
   GITHUB_TOKEN   optional GitHub PAT — raises rate limit 60/hr -> 5000/hr
   MAX_PER_QUERY  optional cap on repos harvested per search query (default 60)
   THROTTLE_SECS  optional min seconds between GitHub calls (default 2)
@@ -35,7 +39,7 @@ import requests
 # Configuration
 # --------------------------------------------------------------------------- #
 
-REGISTRY_URL = os.environ.get("REGISTRY_URL", "https://registry-ruby.vercel.app").rstrip("/")
+REGISTRY_URL = os.environ.get("REGISTRY_URL", "http://34.45.7.252:8000").rstrip("/")
 REGISTER_ENDPOINT = f"{REGISTRY_URL}/api/v1/register"
 GITHUB_TOKEN = os.environ.get("GITHUB_TOKEN", "").strip()
 MAX_PER_QUERY = int(os.environ.get("MAX_PER_QUERY", "1000"))
@@ -136,6 +140,143 @@ logging.basicConfig(
     stream=sys.stdout,
 )
 log = logging.getLogger("beacon-indexer")
+
+# --------------------------------------------------------------------------- #
+# In-memory idempotency cache — one DB read on startup, zero per-repo DB hits.
+# Keys: normalized owner/repo slugs + github URLs (all lowercase).
+# --------------------------------------------------------------------------- #
+
+scraped_nodes_cache: set[str] = set()
+_cache_ready = False
+
+# Back-compat alias used elsewhere in docs/scripts.
+scraped_repositories_cache = scraped_nodes_cache
+
+
+def _normalize_slug(slug: str) -> str:
+    """Canonical owner/repo key — lowercase, no .git suffix."""
+    return (slug or "").strip().lower().removesuffix(".git")
+
+
+def _github_url_variants(url: str) -> set[str]:
+    """All cache keys derivable from a GitHub html_url or mcp_endpoint."""
+    keys: set[str] = set()
+    u = (url or "").strip()
+    if not u:
+        return keys
+    keys.add(u.lower().rstrip("/"))
+    m = re.search(r"github\.com/([^/#?]+/[^/#?]+)", u, re.I)
+    if m:
+        keys.add(_normalize_slug(m.group(1)))
+    return keys
+
+
+def _repo_cache_keys(slug: str, html_url: str) -> set[str]:
+    """Every identifier we treat as 'already indexed' for one repository."""
+    keys: set[str] = set()
+    if slug:
+        keys.add(_normalize_slug(slug))
+    keys |= _github_url_variants(html_url)
+    return keys
+
+
+def _load_cache_from_sqlite() -> set[str]:
+    """Single query: load all known agent_id + mcp_endpoint values into memory."""
+    import turso
+
+    turso.ensure_schema()
+    rows = turso.execute("SELECT agent_id, mcp_endpoint FROM agents")
+    cache: set[str] = set()
+    for row in rows:
+        slug = row.get("agent_id") or ""
+        endpoint = (row.get("mcp_endpoint") or "").strip()
+        cache |= _repo_cache_keys(slug, endpoint)
+    return cache
+
+
+def _load_cache_from_registry(session: requests.Session) -> set[str]:
+    """Fallback: paginate registry HTTP API once (no per-repo DB calls)."""
+    cache: set[str] = set()
+    offset = 0
+    page_size = 500
+    while True:
+        try:
+            resp = session.get(
+                f"{REGISTRY_URL}/api/v1/leaderboard",
+                params={"limit": page_size, "offset": offset},
+                timeout=REQUEST_TIMEOUT,
+            )
+        except requests.RequestException as exc:
+            log.warning("cache preload from registry failed at offset %d: %s", offset, exc)
+            break
+        if resp.status_code != 200:
+            log.warning("cache preload HTTP %d at offset %d", resp.status_code, offset)
+            break
+        body = resp.json()
+        board = body.get("leaderboard") or []
+        if not board:
+            break
+        for row in board:
+            cache |= _repo_cache_keys(row.get("agent_id") or "", row.get("mcp_endpoint") or "")
+        offset += len(board)
+        total = int(body.get("total_count") or 0)
+        if offset >= total or len(board) < page_size:
+            break
+    return cache
+
+
+def _sqlite_available() -> bool:
+    if os.environ.get("SQLITE_DB_PATH"):
+        return True
+    here = os.path.dirname(os.path.abspath(__file__))
+    for name in ("beacon_prod.db", "beacon.db"):
+        if os.path.isfile(os.path.join(here, name)):
+            return True
+    return False
+
+
+def init_scraped_nodes_cache(session: requests.Session, *, force: bool = False) -> None:
+    """
+    Warm scraped_nodes_cache — exactly one bulk read from SQLite or registry API.
+    Call once at process startup; optional refresh at loop boundaries (still one read).
+    """
+    global _cache_ready
+    if _cache_ready and not force:
+        return
+    log.info("Initializing scraped_nodes_cache from database (single bulk read)...")
+    try:
+        if _sqlite_available():
+            loaded = _load_cache_from_sqlite()
+            source = "SQLite"
+        else:
+            loaded = _load_cache_from_registry(session)
+            source = "registry API"
+        scraped_nodes_cache.clear()
+        scraped_nodes_cache.update(loaded)
+        log.info(
+            "scraped_nodes_cache ready — %d keys from %s",
+            len(scraped_nodes_cache),
+            source,
+        )
+    except Exception as exc:
+        log.warning("Could not warm scraped_nodes_cache (%s) — starting empty", exc)
+        scraped_nodes_cache.clear()
+    _cache_ready = True
+
+
+def ensure_scraped_cache(session: requests.Session) -> None:
+    """Backward-compatible entry point."""
+    init_scraped_nodes_cache(session)
+
+
+def _already_indexed(slug: str, html_url: str) -> bool:
+    """O(1) memory check — skip before any register API / DB write."""
+    return bool(_repo_cache_keys(slug, html_url) & scraped_nodes_cache)
+
+
+def _remember_indexed(slug: str, html_url: str) -> None:
+    """Update cache immediately after a successful register (new or updated)."""
+    scraped_nodes_cache.update(_repo_cache_keys(slug, html_url))
 
 
 # --------------------------------------------------------------------------- #
@@ -322,9 +463,12 @@ def register_agent(session: requests.Session, repo: dict) -> bool:
 
     if resp.status_code == 200:
         try:
-            status = resp.json().get("status", "ok")
+            body = resp.json()
+            status = body.get("status", "ok")
         except ValueError:
             status = "ok"
+        # Always update cache on success — including "updated" (idempotent re-register).
+        _remember_indexed(slug, html_url)
         log.info("indexed %-45s [%s] tags=%s", slug, status, tags)
         return True
 
@@ -336,55 +480,87 @@ def register_agent(session: requests.Session, repo: dict) -> bool:
 # Main harvest loop
 # --------------------------------------------------------------------------- #
 
-def run_once() -> dict:
+def run_once(*, refresh_cache: bool = False) -> dict:
     session = build_session()
-    seen: set[str] = set()
-    stats = {"discovered": 0, "indexed": 0, "skipped": 0, "failed": 0}
+    init_scraped_nodes_cache(session, force=refresh_cache)
+    stats = {
+        "discovered": 0,
+        "indexed": 0,
+        "skipped": 0,
+        "memory_skipped": 0,
+        "failed": 0,
+        "cache_keys": len(scraped_nodes_cache),
+    }
 
-    log.info("Beacon indexer starting -> %s", REGISTER_ENDPOINT)
+    log.info("Beacon indexer starting -> %s (cache: %d keys)", REGISTER_ENDPOINT, len(scraped_nodes_cache))
     for query in SEARCH_QUERIES:
         log.info("=== searching GitHub: '%s' ===", query)
+        query_new = 0
+        query_skipped = 0
         try:
             for repo in search_repositories(session, query):
-                slug = repo.get("full_name")
+                slug = repo.get("full_name") or ""
+                html_url = repo.get("html_url") or ""
                 if not slug:
                     continue
-                if slug in seen:
-                    stats["skipped"] += 1
+
+                # Idempotency gate — no register API, no DB read/write beyond memory.
+                if _already_indexed(slug, html_url):
+                    stats["memory_skipped"] += 1
+                    query_skipped += 1
+                    if stats["memory_skipped"] <= 3 or stats["memory_skipped"] % 1000 == 0:
+                        log.debug("skip %s — in scraped_nodes_cache", slug)
                     continue
-                seen.add(slug)
+
                 stats["discovered"] += 1
+                query_new += 1
                 repo["_source_query"] = query
                 try:
                     if register_agent(session, repo):
                         stats["indexed"] += 1
                     else:
                         stats["failed"] += 1
-                except Exception as exc:  # bulletproof per-repo isolation
+                except Exception as exc:
                     stats["failed"] += 1
                     log.error("unexpected error indexing %s: %s", slug, exc)
-                time.sleep(0.08)  # light pacing on our own registry (it handles this fine)
-        except Exception as exc:  # a bad query must never kill the whole run
+                time.sleep(0.08)
+        except Exception as exc:
             log.error("query '%s' aborted: %s", query, exc)
             continue
 
+        if query_new == 0 and query_skipped > 0:
+            log.info("query '%s' — all %d results already cached, no DB writes", query, query_skipped)
+
     log.info(
-        "DONE — discovered=%d indexed=%d failed=%d duplicates_skipped=%d",
-        stats["discovered"], stats["indexed"], stats["failed"], stats["skipped"],
+        "DONE — discovered=%d indexed=%d failed=%d memory_skipped=%d cache_keys=%d",
+        stats["discovered"],
+        stats["indexed"],
+        stats["failed"],
+        stats["memory_skipped"],
+        len(scraped_nodes_cache),
     )
+    if stats["discovered"] == 0 and stats["memory_skipped"] > 100:
+        log.info(
+            "Harvest fully idempotent this run (%d cache hits). "
+            "Increase LOOP_INTERVAL_SECS to reduce GitHub API usage.",
+            stats["memory_skipped"],
+        )
     return stats
 
 
 def main() -> None:
     loop = os.environ.get("LOOP", "").lower() in {"1", "true", "yes"}
     interval = int(os.environ.get("LOOP_INTERVAL_SECS", "21600"))  # default 6h
+    refresh_each_loop = os.environ.get("CACHE_REFRESH_ON_LOOP", "1").lower() in {"1", "true", "yes"}
     if not loop:
         run_once()
         return
-    log.info("LOOP mode enabled — re-harvesting every %ds", interval)
+    log.info("LOOP mode — interval=%ds cache_refresh_each_loop=%s", interval, refresh_each_loop)
+    first = True
     while True:
         try:
-            run_once()
+            run_once(refresh_cache=refresh_each_loop and not first)
+            first = False
         except Exception as exc:
             log.error("run_once crashed, continuing loop: %s", exc)
         log.info("sleeping %ds until next harvest...", interval)
