@@ -672,10 +672,12 @@ Portal: {PORTAL_URL}
 @app.get("/healthz")
 def healthz() -> dict:
     _ensure_ready()
-    rows = turso.execute("SELECT COUNT(*) AS c FROM agents")
+    total = int(turso.execute("SELECT COUNT(*) AS c FROM agents")[0]["c"])
     return {
         "ok": True,
-        "agents": int(rows[0]["c"]) if rows else 0,
+        "agents": total,
+        "total_agents": total,
+        "active_agents_90d": _active_agents_count(),
         "storage": "sqlite",
         "time": _utcnow().isoformat(),
     }
