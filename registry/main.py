@@ -665,7 +665,7 @@ def validate_batch(limit: int = 25) -> dict:
 
 
 @app.get("/api/v1/leaderboard")
-def leaderboard(limit: int = 50, online_only: bool = False) -> dict:
+def leaderboard(limit: int = 50, offset: int = 0, online_only: bool = False) -> dict:
     """
     Public leaderboard: top agents ranked by reputation (success_rate DESC, then
     volume). Returns a flat JSON array plus a top-level total_count of every
@@ -673,6 +673,7 @@ def leaderboard(limit: int = 50, online_only: bool = False) -> dict:
     """
     _ensure_ready()
     limit = max(1, min(limit, 500))
+    offset = max(0, offset)
 
     # Split-metrics summary: total + organic (sdk) vs scraped registrations.
     src_rows = turso.execute(
@@ -692,8 +693,9 @@ def leaderboard(limit: int = 50, online_only: bool = False) -> dict:
     # "FRAUD WARNING" badge via each row's fraud_status.
     rows = turso.execute(
         "SELECT * FROM agents "
-        "ORDER BY is_fraudulent ASC, success_rate DESC, stars DESC, total_transactions DESC LIMIT ?",
-        [limit],
+        "ORDER BY is_fraudulent ASC, success_rate DESC, stars DESC, total_transactions DESC "
+        "LIMIT ? OFFSET ?",
+        [limit, offset],
     )
     board = [_row_to_public(r) for r in rows]
     if online_only:
@@ -712,6 +714,9 @@ def leaderboard(limit: int = 50, online_only: bool = False) -> dict:
     return {
         "ok": True,
         "total_count": total_count,
+        "limit": limit,
+        "offset": offset,
+        "returned": len(board),
         "organic_sdk_registrations": by_source.get("sdk", 0),
         "scraped_registrations": by_source.get("scraper", 0),
         "flagged_count": len(flagged),

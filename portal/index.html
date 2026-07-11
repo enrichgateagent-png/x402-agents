@@ -99,6 +99,11 @@
         <div id="grid" class="grid grid-cols-1 gap-4 sm:grid-cols-2"></div>
         <div id="empty" class="hidden py-16 text-center text-slate-500">No agents matched. Try another capability.</div>
         <div id="loading" class="py-16 text-center text-slate-500">Loading registry…</div>
+        <div id="pager" class="mt-6 hidden items-center justify-between gap-3">
+          <button id="prevBtn" class="rounded-xl border border-white/10 bg-white/5 px-4 py-2 text-sm text-slate-300 transition enabled:hover:border-beacon-400/50 enabled:hover:text-white disabled:cursor-not-allowed disabled:opacity-30">← Prev</button>
+          <span id="pageInfo" class="text-xs text-slate-400 tabular-nums">—</span>
+          <button id="nextBtn" class="rounded-xl border border-white/10 bg-white/5 px-4 py-2 text-sm text-slate-300 transition enabled:hover:border-beacon-400/50 enabled:hover:text-white disabled:cursor-not-allowed disabled:opacity-30">Next →</button>
+        </div>
       </div>
 
       <!-- Live developer radar -->
@@ -291,27 +296,54 @@
       fg.innerHTML = flagged.map(fraudCard).join("");
     }
 
-    // ---- Leaderboard (counters + board + fraud) ----
+    // ---- Leaderboard (counters + board + fraud, paginated) ----
+    const PAGE_SIZE = 48;
+    let page = 0;
+    let totalCount = 0;
+
+    function renderPager() {
+      const pager = $("pager");
+      const pages = Math.max(1, Math.ceil(totalCount / PAGE_SIZE));
+      $("pageInfo").textContent =
+        `Page ${page + 1} of ${pages.toLocaleString()} · ${totalCount.toLocaleString()} agents`;
+      $("prevBtn").disabled = page <= 0;
+      $("nextBtn").disabled = page >= pages - 1;
+      pager.classList.remove("hidden");
+      pager.classList.add("flex");
+    }
+
     async function loadLeaderboard() {
-      sectionTitle.textContent = "Top verified agents";
+      sectionTitle.textContent = "Browse all agents";
       resetBtn.classList.add("hidden");
       loading.classList.remove("hidden");
       try {
-        const r = await fetch(`${API}/api/v1/leaderboard?limit=48`);
+        const r = await fetch(`${API}/api/v1/leaderboard?limit=${PAGE_SIZE}&offset=${page * PAGE_SIZE}`);
         const d = await r.json();
+        totalCount = d.total_count || 0;
         animateCount($("cGlobal"), d.total_count);
         animateCount($("cScraped"), d.scraped_registrations);
         render(d.leaderboard || []);
         renderFraud(d.flagged_agents || []);
+        renderPager();
+        window.scrollTo({ top: 0, behavior: "smooth" });
       } catch {
         loading.textContent = "Could not reach the registry.";
       }
     }
 
+    function goPage(delta) {
+      const pages = Math.max(1, Math.ceil(totalCount / PAGE_SIZE));
+      const next = Math.min(Math.max(0, page + delta), pages - 1);
+      if (next === page) return;
+      page = next;
+      loadLeaderboard();
+    }
+
     async function search(q) {
-      if (!q.trim()) return loadLeaderboard();
+      if (!q.trim()) { page = 0; return loadLeaderboard(); }
       sectionTitle.textContent = `Results for “${q}”`;
       resetBtn.classList.remove("hidden");
+      $("pager").classList.add("hidden");        // search returns ranked matches, not pages
       loading.classList.remove("hidden");
       grid.innerHTML = ""; empty.classList.add("hidden");
       try {
@@ -327,7 +359,9 @@
     }
 
     $("searchForm").addEventListener("submit", (e) => { e.preventDefault(); search($("searchInput").value); });
-    resetBtn.addEventListener("click", () => { $("searchInput").value = ""; loadLeaderboard(); });
+    resetBtn.addEventListener("click", () => { $("searchInput").value = ""; page = 0; loadLeaderboard(); });
+    $("prevBtn").addEventListener("click", () => goPage(-1));
+    $("nextBtn").addEventListener("click", () => goPage(1));
 
     const chips = ["mcp server", "crypto trading", "pdf extraction", "auditing", "multi-agent", "langchain"];
     $("chips").innerHTML = chips.map(c => `<button class="rounded-full border border-white/10 bg-white/5 px-3 py-1 text-slate-300 transition hover:border-beacon-400/50 hover:text-white">${c}</button>`).join("");
