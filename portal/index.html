@@ -66,16 +66,13 @@
   </nav>
 
   <!-- Hero -->
-  <header class="mx-auto max-w-3xl px-5 pt-16 pb-6 text-center sm:pt-20">
-    <div class="mb-5 inline-flex items-center gap-2 rounded-full border border-white/10 bg-white/[.03] px-3.5 py-1.5 text-xs text-slate-400">
-      <span class="h-1.5 w-1.5 rounded-full bg-iris-400 animate-glow"></span>
-      Live-indexed from GitHub · searchable via MCP
-    </div>
+  <header class="mx-auto max-w-3xl px-5 pt-16 pb-6 text-center sm:pt-24">
     <h1 class="text-4xl font-extrabold leading-[1.05] tracking-tight text-white sm:text-6xl">
-      The search engine<br class="hidden sm:block" /> for <span class="grad-text">AI agents</span>
+      Search, Discover &amp; Verify<br class="hidden sm:block" />
+      <span class="grad-text"><span id="heroCount">3,000+</span> AI Agents</span>
     </h1>
-    <p class="mx-auto mt-5 max-w-xl text-[15px] leading-relaxed text-slate-400">
-      Find open-source AI agents by what they actually do. Ranked by real GitHub traction, checked for activity, and defended against fraud.
+    <p class="mx-auto mt-5 max-w-2xl text-[15px] leading-relaxed text-slate-400">
+      The open-source index for autonomous frameworks. Search production-ready agents by capability, ecosystem stars, and live repository maintenance signals.
     </p>
 
     <form id="searchForm" class="group mx-auto mt-8 flex max-w-xl items-center gap-2 rounded-2xl border border-white/10 bg-white/[.04] p-2 shadow-2xl shadow-black/40 backdrop-blur transition focus-within:border-iris-400/60 focus-within:shadow-iris-500/10">
@@ -84,6 +81,13 @@
       <button type="submit" class="shrink-0 rounded-xl btn-grad px-5 py-2.5 text-sm font-semibold text-white shadow-lg shadow-iris-500/25 transition hover:brightness-110 active:scale-[.98]">Search</button>
     </form>
     <div id="chips" class="mt-4 flex flex-wrap items-center justify-center gap-2 text-[13px]"></div>
+
+    <div class="mx-auto mt-7 flex max-w-xl flex-wrap items-center justify-center gap-x-2.5 gap-y-2 text-xs text-slate-500">
+      <span class="text-slate-400">Building an agent?</span>
+      <code class="rounded-md border border-white/10 bg-ink-950/70 px-2 py-1 font-mono text-[12px] text-iris-200">npx -y beacon-mcp</code>
+      <span>to query this index locally, or</span>
+      <a href="#mcp" class="font-medium text-iris-300 hover:text-iris-200">grab your live status badge →</a>
+    </div>
   </header>
 
   <!-- Main -->
@@ -117,16 +121,17 @@
         </div>
       </section>
 
-      <!-- Live feed -->
+      <!-- Browse panel -->
       <aside class="lg:col-span-1">
-        <div class="sticky top-20">
-          <div class="mb-4 flex items-center gap-2.5">
-            <span class="relative flex h-2 w-2"><span class="absolute h-full w-full animate-ping2 rounded-full bg-emerald-400"></span><span class="relative h-2 w-2 rounded-full bg-emerald-400"></span></span>
-            <h3 class="text-sm font-semibold text-white">Recently indexed</h3>
+        <div class="sticky top-20 space-y-7">
+          <div>
+            <h3 class="mb-3 text-xs font-semibold uppercase tracking-widest text-slate-400">Browse by framework</h3>
+            <div id="cats" class="flex flex-col gap-2"></div>
           </div>
-          <p class="-mt-2.5 mb-4 text-xs text-slate-500">New agents entering the network, live.</p>
-          <div id="feed" class="feed-scroll max-h-[560px] space-y-2 overflow-y-auto pr-1"></div>
-          <div id="feedState" class="surface rounded-xl py-10 text-center text-xs text-slate-500">Connecting to the network…</div>
+          <div>
+            <h3 class="mb-3 text-xs font-semibold uppercase tracking-widest text-slate-400">Popular capabilities</h3>
+            <div id="caps" class="flex flex-wrap gap-2"></div>
+          </div>
         </div>
       </aside>
     </div>
@@ -223,30 +228,28 @@
       empty.classList.toggle("hidden", list.length > 0);
     }
 
-    // ---- Recently-indexed feed (real crawler activity) ----
-    function feedRow(a, i) {
-      const tags = (a.capabilities_tags || []).slice(0, 3);
-      return `
-        <div class="surface animate-rise rounded-xl p-3" style="animation-delay:${Math.min(i,10)*20}ms">
-          <div class="flex items-center justify-between gap-2">
-            <span class="clamp1 text-sm font-medium text-white">${esc(a.name)}</span>
-            <span class="shrink-0 text-[10px] text-emerald-400/80">${esc(relTime(a.created_at))}</span>
-          </div>
-          <div class="mt-1.5 flex items-center gap-2">
-            ${(a.stars ?? 0) > 0 ? `<span class="inline-flex items-center gap-0.5 text-[10px] text-amber-300/90"><svg class="h-3 w-3" viewBox="0 0 24 24" fill="currentColor"><path d="m12 2 3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01Z"/></svg>${fmtStars(a.stars)}</span>` : ""}
-            <div class="flex flex-wrap gap-1">${tags.map(t => `<span class="rounded bg-white/[.05] px-1.5 py-0.5 text-[10px] text-slate-400">${esc(t)}</span>`).join("")}</div>
-          </div>
-        </div>`;
-    }
-    async function loadFeed() {
-      try {
-        const r = await fetch(`${API}/api/v1/agents?sort=recent&limit=18`);
-        const d = await r.json();
-        const items = d.agents || [];
-        if (!items.length) { $("feed").innerHTML = ""; $("feedState").textContent = "No activity yet."; $("feedState").classList.remove("hidden"); return; }
-        $("feedState").classList.add("hidden");
-        $("feed").innerHTML = items.map(feedRow).join("");
-      } catch { $("feed").innerHTML = ""; $("feedState").textContent = "Feed reconnecting…"; $("feedState").classList.remove("hidden"); }
+    // ---- Browse panel (framework + capability shortcuts -> search) ----
+    const FRAMEWORKS = [
+      { label: "MCP servers", q: "mcp server", icon: "🔌" },
+      { label: "CrewAI", q: "crewai", icon: "⛵" },
+      { label: "LangChain", q: "langchain", icon: "🦜" },
+      { label: "LangGraph", q: "langgraph", icon: "🕸️" },
+      { label: "ElizaOS", q: "elizaos", icon: "🤖" },
+      { label: "AutoGen", q: "autogen", icon: "⚙️" },
+    ];
+    const CAPABILITIES = ["web scraping", "trading bot", "pdf extraction", "rag", "voice", "browser automation", "code review", "data analysis"];
+
+    function renderBrowse() {
+      $("cats").innerHTML = FRAMEWORKS.map(f => `
+        <button data-q="${esc(f.q)}" class="surface surface-hover flex items-center gap-2.5 rounded-xl px-3.5 py-2.5 text-left text-sm text-slate-200">
+          <span class="text-base">${f.icon}</span><span class="font-medium">${esc(f.label)}</span>
+          <svg class="ml-auto h-3.5 w-3.5 text-slate-600" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="m9 18 6-6-6-6" stroke-linecap="round" stroke-linejoin="round"/></svg>
+        </button>`).join("");
+      $("caps").innerHTML = CAPABILITIES.map(c =>
+        `<button data-q="${esc(c)}" class="rounded-full border border-white/10 bg-white/[.03] px-3 py-1.5 text-xs text-slate-400 transition hover:border-iris-400/40 hover:text-white">${esc(c)}</button>`).join("");
+      const go = (e) => { const b = e.target.closest("button[data-q]"); if (b) { $("searchInput").value = b.dataset.q; search(b.dataset.q); } };
+      $("cats").addEventListener("click", go);
+      $("caps").addEventListener("click", go);
     }
 
     // ---- Fraud ----
@@ -277,7 +280,7 @@
     const PAGE_SIZE = 48;
     let page = 0, totalCount = 0, sortMode = "top", searching = false;
 
-    function setStat(n) { totalCount = n; animateCount($("navCountNum"), n); animateCount($("footCount"), n); $("navCount").classList.remove("hidden"); }
+    function setStat(n) { totalCount = n; animateCount($("navCountNum"), n); animateCount($("footCount"), n); animateCount($("heroCount"), n); $("navCount").classList.remove("hidden"); }
     function renderPager() {
       const pages = Math.max(1, Math.ceil(totalCount / PAGE_SIZE));
       $("pageInfo").textContent = `Page ${page + 1} of ${pages.toLocaleString()}`;
@@ -346,9 +349,8 @@
 
     // init sort toggle active state
     [...$("sortToggle").children][0].className = "rounded-md px-3 py-1.5 font-medium text-white bg-white/10 transition";
+    renderBrowse();
     loadBrowse();
-    loadFeed();
-    setInterval(loadFeed, 25000);
   </script>
 </body>
 </html>

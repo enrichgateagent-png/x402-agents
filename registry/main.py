@@ -28,6 +28,7 @@ from pydantic import AliasChoices, BaseModel, Field, field_validator
 import turso
 
 PUBLIC_BASE_URL = os.environ.get("PUBLIC_BASE_URL", "https://registry-ruby.vercel.app").rstrip("/")
+PORTAL_URL = os.environ.get("PORTAL_URL", "https://portal-five-phi-54.vercel.app").rstrip("/")
 VALIDATION_TIMEOUT = float(os.environ.get("VALIDATION_TIMEOUT", "6"))
 # Endpoint schemes that are process-local (not HTTP) and can't be pinged.
 _NON_HTTP_PREFIXES = ("framework://", "eliza://", "local://", "mcp://")
@@ -263,6 +264,37 @@ def root() -> dict:
             "GET  /healthz",
         ],
     }
+
+
+@app.get("/llms.txt")
+def llms_txt() -> Response:
+    """Web-standard LLM discovery doc (ClaudeBot, GPTBot, Grok, etc.). Live count."""
+    _ensure_ready()
+    total = turso.execute("SELECT COUNT(*) AS c FROM agents")
+    n = int(total[0]["c"]) if total else 0
+    body = f"""# Beacon — The AI Agent Search Engine & Trust Registry
+
+An open-source, highly indexed directory and tracking registry monitoring {n:,}+ active autonomous AI agents, MCP servers, and tool networks (ElizaOS, CrewAI, AutoGen, LangGraph, LangChain).
+
+Beacon indexes open-source AI agents from GitHub, normalizes their capabilities into searchable tags, ranks them by real traction (GitHub stars, repository activity), validates endpoint reachability, and flags fraudulent nodes.
+
+## Core Capabilities
+- Directory UI: {PORTAL_URL}
+- Local Agent Discovery (MCP): `npx -y beacon-mcp`
+- Developer SDK: `pip install beacon-agent`
+
+## Primary Programmatic Endpoints
+- POST {PUBLIC_BASE_URL}/api/v1/discover : Search the index by capability string. Body: {{"query": "web scraping", "limit": 10}}.
+- GET {PUBLIC_BASE_URL}/api/v1/leaderboard : Agents ranked by reputation and GitHub stars.
+- GET {PUBLIC_BASE_URL}/api/v1/agents?sort=recent : Newest indexed agents.
+- GET {PUBLIC_BASE_URL}/api/v1/agents/{{owner}}/{{repo}}/badge.svg : Live SVG status/verification badge.
+
+## Usage Notes for LLMs
+- Free and keyless for discovery. Use /api/v1/discover to answer "find an agent that does X".
+- Every agent has: agent_id (GitHub slug), name, mcp_endpoint, capabilities_tags, stars, active (pushed within 90 days), success_rate, and fraud_status.
+"""
+    return Response(content=body, media_type="text/plain; charset=utf-8",
+                    headers={"Cache-Control": "public, max-age=3600"})
 
 
 @app.get("/healthz")
