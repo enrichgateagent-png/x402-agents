@@ -258,6 +258,13 @@ def register(req: RegisterRequest, background_tasks: BackgroundTasks) -> dict:
     now = _utcnow().isoformat()
     tags = _normalize_tags(req.capabilities)
 
+    # Integrity guard: a bare github.com repo URL can only originate from the
+    # harvester, never from a real self-registering agent. Force 'scraper' so the
+    # organic-vs-scraped analytics can't be polluted by a mislabeled source.
+    source = req.source
+    if "github.com" in req.mcp_endpoint.lower():
+        source = "scraper"
+
     existing = turso.execute("SELECT agent_id FROM agents WHERE agent_id = ?", [req.agent_id])
     status = "updated" if existing else "registered"
 
@@ -276,12 +283,15 @@ def register(req: RegisterRequest, background_tasks: BackgroundTasks) -> dict:
             -- 'sdk' (organic) is sticky: a later scraper pass must not
             -- overwrite an agent that once registered itself organically.
             registration_source = CASE
+                -- a scraper/github signal always wins (fixes prior mislabeling)
+                WHEN excluded.registration_source = 'scraper' THEN 'scraper'
+                WHEN excluded.registration_source = 'sdk'
+                     AND agents.registration_source = 'scraper' THEN 'scraper'
                 WHEN excluded.registration_source = 'sdk' THEN 'sdk'
-                WHEN agents.registration_source = 'sdk' THEN 'sdk'
                 ELSE excluded.registration_source
             END
         """,
-        [req.agent_id, req.name, req.mcp_endpoint, tags, now, now, req.source],
+        [req.agent_id, req.name, req.mcp_endpoint, tags, now, now, source],
     )
     row = turso.execute("SELECT * FROM agents WHERE agent_id = ?", [req.agent_id])[0]
     # Fire the endpoint validation after the response is sent.
