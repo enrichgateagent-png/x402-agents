@@ -3,227 +3,216 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>Beacon — Discovery Registry for AI Agents</title>
-  <meta name="description" content="Google indexes websites for humans. Beacon indexes agents for agents. Search live AI agents by capability, watch live integrations, and monitor flagged nodes." />
+  <title>Beacon — The search engine for AI agents</title>
+  <meta name="description" content="Search thousands of open-source AI agents by capability. Ranked by real GitHub traction, live-indexed, and searchable from your editor via MCP." />
   <script src="https://cdn.tailwindcss.com"></script>
   <script>
     tailwind.config = {
       darkMode: "class",
       theme: { extend: {
-        fontFamily: { sans: ["Inter", "ui-sans-serif", "system-ui", "sans-serif"] },
-        colors: { beacon: { 500: "#6366f1", 400: "#818cf8", 300: "#a5b4fc" } },
+        fontFamily: { sans: ["Inter", "ui-sans-serif", "system-ui", "sans-serif"], mono: ["ui-monospace", "SFMono-Regular", "monospace"] },
+        colors: { ink: { 950: "#08080c", 900: "#0d0d14", 800: "#14141f" }, iris: { 300: "#a5b4fc", 400: "#818cf8", 500: "#6366f1", 600: "#5b53e0" } },
         keyframes: {
-          pulseGlow: { "0%,100%": { opacity: 1 }, "50%": { opacity: .35 } },
-          fadeUp: { "0%": { opacity: 0, transform: "translateY(8px)" }, "100%": { opacity: 1, transform: "none" } },
-          blink: { "0%,100%": { opacity: 1 }, "50%": { opacity: .25 } },
-          scan: { "0%": { transform: "translateY(-100%)" }, "100%": { transform: "translateY(400%)" } },
+          glow: { "0%,100%": { opacity: 1 }, "50%": { opacity: .4 } },
+          rise: { "0%": { opacity: 0, transform: "translateY(10px)" }, "100%": { opacity: 1, transform: "none" } },
+          blink: { "0%,100%": { opacity: 1 }, "50%": { opacity: .3 } },
+          ping2: { "75%,100%": { transform: "scale(2.4)", opacity: 0 } },
         },
-        animation: {
-          pulseGlow: "pulseGlow 1.8s ease-in-out infinite",
-          fadeUp: "fadeUp .4s ease both",
-          blink: "blink 1s steps(2,start) infinite",
-        },
+        animation: { glow: "glow 2s ease-in-out infinite", rise: "rise .45s cubic-bezier(.2,.7,.2,1) both", blink: "blink 1.1s steps(2,start) infinite", ping2: "ping2 1.6s cubic-bezier(0,0,.2,1) infinite" },
       } },
     };
   </script>
   <link rel="preconnect" href="https://fonts.googleapis.com" />
-  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet" />
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&display=swap" rel="stylesheet" />
   <style>
-    body { background: radial-gradient(1200px 600px at 50% -10%, #1e1b4b 0%, #0b0b12 55%, #08080d 100%); }
-    .card-hover { transition: transform .18s ease, box-shadow .18s ease, border-color .18s ease; }
-    .card-hover:hover { transform: translateY(-3px); box-shadow: 0 12px 40px -12px rgba(99,102,241,.35); }
-    .fraud-card { box-shadow: 0 0 0 1px rgba(220,38,38,.4), 0 10px 40px -12px rgba(220,38,38,.5); }
-    ::-webkit-scrollbar { height: 8px; width: 8px; } ::-webkit-scrollbar-thumb { background: #2a2a3a; border-radius: 8px; }
-    .radar-scroll { scrollbar-width: thin; }
+    :root { color-scheme: dark; }
+    body {
+      background:
+        radial-gradient(900px 480px at 15% -8%, rgba(99,102,241,.18), transparent 60%),
+        radial-gradient(760px 420px at 95% 0%, rgba(139,92,246,.12), transparent 55%),
+        #08080c;
+    }
+    .surface { background: rgba(255,255,255,.025); border: 1px solid rgba(255,255,255,.07); }
+    .surface-hover { transition: transform .2s cubic-bezier(.2,.7,.2,1), border-color .2s, background .2s; }
+    .surface-hover:hover { transform: translateY(-2px); border-color: rgba(129,140,248,.35); background: rgba(255,255,255,.045); }
+    .divide-soft { border-color: rgba(255,255,255,.06); }
+    .grad-text { background: linear-gradient(100deg,#c7d2fe,#a78bfa 55%,#f0abfc); -webkit-background-clip: text; background-clip: text; color: transparent; }
+    .btn-grad { background: linear-gradient(100deg,#6366f1,#8b5cf6); }
+    ::-webkit-scrollbar { width: 9px; height: 9px; } ::-webkit-scrollbar-thumb { background: #23232e; border-radius: 9px; } ::-webkit-scrollbar-thumb:hover { background: #2f2f3d; }
+    .feed-scroll { scrollbar-width: thin; }
+    .clamp1 { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
   </style>
 </head>
-<body class="min-h-screen font-sans text-slate-200 antialiased">
-  <!-- Header -->
-  <header class="mx-auto max-w-6xl px-5 pt-10 pb-2">
-    <div class="flex items-center gap-3">
-      <div class="grid h-10 w-10 place-items-center rounded-xl bg-gradient-to-br from-beacon-500 to-fuchsia-500 shadow-lg shadow-beacon-500/30">
-        <svg viewBox="0 0 24 24" class="h-6 w-6 text-white" fill="none" stroke="currentColor" stroke-width="2">
-          <path d="M12 3v3m0 12v3M5.6 5.6l2.1 2.1m8.6 8.6 2.1 2.1M3 12h3m12 0h3M5.6 18.4l2.1-2.1m8.6-8.6 2.1-2.1" stroke-linecap="round"/>
-          <circle cx="12" cy="12" r="3.2" fill="currentColor" stroke="none"/>
-        </svg>
-      </div>
-      <div>
-        <h1 class="text-xl font-extrabold tracking-tight text-white">Beacon</h1>
-        <p class="text-xs text-slate-400 -mt-0.5">Discovery registry for AI agents</p>
+<body class="min-h-screen font-sans text-slate-300 antialiased">
+
+  <!-- Nav -->
+  <nav class="sticky top-0 z-20 border-b border-white/5 bg-ink-950/70 backdrop-blur-xl">
+    <div class="mx-auto flex max-w-6xl items-center justify-between px-5 py-3.5">
+      <a href="#" class="flex items-center gap-2.5">
+        <span class="grid h-8 w-8 place-items-center rounded-lg btn-grad shadow-lg shadow-iris-500/25">
+          <svg viewBox="0 0 24 24" class="h-5 w-5 text-white" fill="none" stroke="currentColor" stroke-width="2.2"><path d="M12 3v2.5m0 13V21M4.5 12H2m20 0h-2.5M6 6l1.8 1.8M18 18l-1.8-1.8M18 6l-1.8 1.8M6 18l1.8-1.8" stroke-linecap="round"/><circle cx="12" cy="12" r="3" fill="currentColor" stroke="none"/></svg>
+        </span>
+        <span class="text-[15px] font-bold tracking-tight text-white">Beacon</span>
+      </a>
+      <div class="flex items-center gap-1.5 text-sm">
+        <span id="navCount" class="mr-1 hidden items-center gap-1.5 rounded-full border border-white/10 bg-white/5 px-3 py-1 text-xs text-slate-300 sm:inline-flex">
+          <span class="relative flex h-1.5 w-1.5"><span class="absolute h-full w-full animate-ping2 rounded-full bg-emerald-400"></span><span class="relative h-1.5 w-1.5 rounded-full bg-emerald-400"></span></span>
+          <span id="navCountNum" class="tabular-nums font-semibold text-white">—</span> indexed
+        </span>
+        <a href="https://github.com/enrichgateagent-png/x402-agents" target="_blank" rel="noopener" class="rounded-lg px-3 py-1.5 text-slate-400 transition hover:text-white">GitHub</a>
+        <a href="#mcp" class="rounded-lg btn-grad px-3.5 py-1.5 font-medium text-white shadow-lg shadow-iris-500/25 transition hover:brightness-110">Add to your editor</a>
       </div>
     </div>
-  </header>
+  </nav>
 
-  <!-- Hero + Search -->
-  <section class="mx-auto max-w-3xl px-5 pt-6 pb-2 text-center">
-    <h2 class="text-3xl sm:text-4xl font-extrabold tracking-tight text-white">
-      Google indexes websites.<br class="hidden sm:block" />
-      <span class="bg-gradient-to-r from-beacon-300 to-fuchsia-400 bg-clip-text text-transparent">Beacon indexes agents.</span>
-    </h2>
-    <p class="mx-auto mt-3 max-w-xl text-sm text-slate-400">
-      Search live AI agents by capability. Ranked by reputation, validated for reachability, defended against fraud.
+  <!-- Hero -->
+  <header class="mx-auto max-w-3xl px-5 pt-16 pb-6 text-center sm:pt-20">
+    <div class="mb-5 inline-flex items-center gap-2 rounded-full border border-white/10 bg-white/[.03] px-3.5 py-1.5 text-xs text-slate-400">
+      <span class="h-1.5 w-1.5 rounded-full bg-iris-400 animate-glow"></span>
+      Live-indexed from GitHub · searchable via MCP
+    </div>
+    <h1 class="text-4xl font-extrabold leading-[1.05] tracking-tight text-white sm:text-6xl">
+      The search engine<br class="hidden sm:block" /> for <span class="grad-text">AI agents</span>
+    </h1>
+    <p class="mx-auto mt-5 max-w-xl text-[15px] leading-relaxed text-slate-400">
+      Find open-source AI agents by what they actually do. Ranked by real GitHub traction, checked for activity, and defended against fraud.
     </p>
 
-    <form id="searchForm" class="mx-auto mt-7 flex max-w-2xl items-center gap-2 rounded-2xl border border-white/10 bg-white/5 p-2 backdrop-blur focus-within:border-beacon-400/60 focus-within:shadow-lg focus-within:shadow-beacon-500/20">
-      <svg class="ml-2 h-5 w-5 shrink-0 text-slate-400" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="7"/><path d="m21 21-4.3-4.3" stroke-linecap="round"/></svg>
-      <input id="searchInput" type="text" autocomplete="off" placeholder="Try: pdf extraction, crypto trading, mcp server, auditing…"
-             class="w-full bg-transparent px-1 py-2 text-sm text-white placeholder-slate-500 outline-none" />
-      <button type="submit" class="shrink-0 rounded-xl bg-gradient-to-br from-beacon-500 to-fuchsia-500 px-5 py-2 text-sm font-semibold text-white shadow-lg shadow-beacon-500/30 transition hover:brightness-110 active:scale-95">Discover</button>
+    <form id="searchForm" class="group mx-auto mt-8 flex max-w-xl items-center gap-2 rounded-2xl border border-white/10 bg-white/[.04] p-2 shadow-2xl shadow-black/40 backdrop-blur transition focus-within:border-iris-400/60 focus-within:shadow-iris-500/10">
+      <svg class="ml-2.5 h-5 w-5 shrink-0 text-slate-500 transition group-focus-within:text-iris-300" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="7"/><path d="m21 21-4.3-4.3" stroke-linecap="round"/></svg>
+      <input id="searchInput" type="text" autocomplete="off" placeholder="Search: pdf extraction, web scraping, trading bot…" class="w-full bg-transparent px-1 py-2.5 text-[15px] text-white placeholder-slate-500 outline-none" />
+      <button type="submit" class="shrink-0 rounded-xl btn-grad px-5 py-2.5 text-sm font-semibold text-white shadow-lg shadow-iris-500/25 transition hover:brightness-110 active:scale-[.98]">Search</button>
     </form>
-    <div id="chips" class="mt-3 flex flex-wrap items-center justify-center gap-2 text-xs"></div>
-  </section>
+    <div id="chips" class="mt-4 flex flex-wrap items-center justify-center gap-2 text-[13px]"></div>
+  </header>
 
-  <!-- Two-way counter split -->
-  <section class="mx-auto max-w-2xl px-5 pt-6">
-    <div class="grid grid-cols-1 gap-3 sm:grid-cols-2">
-      <div class="rounded-2xl border border-white/10 bg-white/[.04] p-5 text-center">
-        <div id="cGlobal" class="text-3xl font-extrabold text-white tabular-nums">—</div>
-        <div class="mt-1 text-[11px] uppercase tracking-widest text-slate-400">Global Index</div>
-      </div>
-      <div class="rounded-2xl border border-beacon-500/20 bg-beacon-500/[.06] p-5 text-center">
-        <div id="cScraped" class="text-3xl font-extrabold text-beacon-300 tabular-nums">—</div>
-        <div class="mt-1 text-[11px] uppercase tracking-widest text-beacon-300/80">Verified Scraped</div>
-      </div>
-    </div>
-  </section>
+  <!-- Main -->
+  <main class="mx-auto max-w-6xl px-5 pb-24 pt-8">
+    <div class="grid grid-cols-1 gap-10 lg:grid-cols-3">
 
-  <!-- Main + Radar layout -->
-  <main class="mx-auto max-w-6xl px-5 py-10">
-    <div class="grid grid-cols-1 gap-8 lg:grid-cols-3">
-      <!-- Discovery / leaderboard -->
-      <div class="lg:col-span-2">
-        <div class="mb-4 flex items-center justify-between">
-          <h3 id="sectionTitle" class="text-sm font-semibold uppercase tracking-widest text-slate-400">Top verified agents</h3>
-          <button id="resetBtn" class="hidden text-xs text-beacon-300 hover:text-beacon-400">← back to leaderboard</button>
+      <!-- Results -->
+      <section class="lg:col-span-2">
+        <div class="mb-5 flex items-end justify-between gap-3">
+          <div>
+            <h2 id="sectionTitle" class="text-lg font-bold text-white">Top agents</h2>
+            <p id="sectionSub" class="mt-0.5 text-xs text-slate-500">Ranked by reputation & GitHub stars</p>
+          </div>
+          <div class="flex items-center gap-2">
+            <button id="resetBtn" class="hidden text-xs text-iris-300 hover:text-iris-400">← all agents</button>
+            <div id="sortToggle" class="inline-flex rounded-lg border border-white/10 bg-white/[.03] p-0.5 text-xs">
+              <button data-sort="top" class="rounded-md px-3 py-1.5 font-medium text-white transition">Top</button>
+              <button data-sort="recent" class="rounded-md px-3 py-1.5 text-slate-400 transition hover:text-white">Recent</button>
+            </div>
+          </div>
         </div>
-        <div id="grid" class="grid grid-cols-1 gap-4 sm:grid-cols-2"></div>
-        <div id="empty" class="hidden py-16 text-center text-slate-500">No agents matched. Try another capability.</div>
-        <div id="loading" class="py-16 text-center text-slate-500">Loading registry…</div>
-        <div id="pager" class="mt-6 hidden items-center justify-between gap-3">
-          <button id="prevBtn" class="rounded-xl border border-white/10 bg-white/5 px-4 py-2 text-sm text-slate-300 transition enabled:hover:border-beacon-400/50 enabled:hover:text-white disabled:cursor-not-allowed disabled:opacity-30">← Prev</button>
-          <span id="pageInfo" class="text-xs text-slate-400 tabular-nums">—</span>
-          <button id="nextBtn" class="rounded-xl border border-white/10 bg-white/5 px-4 py-2 text-sm text-slate-300 transition enabled:hover:border-beacon-400/50 enabled:hover:text-white disabled:cursor-not-allowed disabled:opacity-30">Next →</button>
-        </div>
-      </div>
 
-      <!-- Live developer radar -->
+        <div id="grid" class="grid grid-cols-1 gap-3.5 sm:grid-cols-2"></div>
+        <div id="empty" class="hidden py-20 text-center text-sm text-slate-500">No agents matched — try a broader capability.</div>
+        <div id="loading" class="py-20 text-center text-sm text-slate-500">Loading the index…</div>
+
+        <div id="pager" class="mt-7 hidden items-center justify-between gap-3">
+          <button id="prevBtn" class="rounded-xl border border-white/10 bg-white/[.03] px-4 py-2 text-sm text-slate-300 transition enabled:hover:border-iris-400/40 enabled:hover:text-white disabled:cursor-not-allowed disabled:opacity-30">← Prev</button>
+          <span id="pageInfo" class="text-xs text-slate-500 tabular-nums">—</span>
+          <button id="nextBtn" class="rounded-xl border border-white/10 bg-white/[.03] px-4 py-2 text-sm text-slate-300 transition enabled:hover:border-iris-400/40 enabled:hover:text-white disabled:cursor-not-allowed disabled:opacity-30">Next →</button>
+        </div>
+      </section>
+
+      <!-- Live feed -->
       <aside class="lg:col-span-1">
-        <div class="mb-4 flex items-center gap-2">
-          <span class="relative flex h-2.5 w-2.5">
-            <span class="absolute inline-flex h-full w-full animate-ping rounded-full bg-emerald-400 opacity-75"></span>
-            <span class="relative inline-flex h-2.5 w-2.5 rounded-full bg-emerald-400"></span>
-          </span>
-          <h3 class="text-sm font-semibold uppercase tracking-widest text-slate-400">Live network feed</h3>
+        <div class="sticky top-20">
+          <div class="mb-4 flex items-center gap-2.5">
+            <span class="relative flex h-2 w-2"><span class="absolute h-full w-full animate-ping2 rounded-full bg-emerald-400"></span><span class="relative h-2 w-2 rounded-full bg-emerald-400"></span></span>
+            <h3 class="text-sm font-semibold text-white">Recently indexed</h3>
+          </div>
+          <p class="-mt-2.5 mb-4 text-xs text-slate-500">New agents entering the network, live.</p>
+          <div id="feed" class="feed-scroll max-h-[560px] space-y-2 overflow-y-auto pr-1"></div>
+          <div id="feedState" class="surface rounded-xl py-10 text-center text-xs text-slate-500">Connecting to the network…</div>
         </div>
-        <p class="-mt-2 mb-3 text-xs text-slate-500">Core live integration nodes & new sign-ups, in real time.</p>
-        <div id="radar" class="radar-scroll max-h-[520px] space-y-2.5 overflow-y-auto pr-1"></div>
-        <div id="radarState" class="rounded-xl border border-white/10 bg-white/[.03] py-8 text-center text-xs text-slate-500">Connecting to feed…</div>
       </aside>
     </div>
 
-    <!-- Network security watch -->
-    <section class="mt-14">
-      <div class="mb-4 flex items-center gap-3">
-        <div class="grid h-8 w-8 place-items-center rounded-lg bg-red-500/15 ring-1 ring-red-500/30">
+    <!-- Security watch -->
+    <section class="mt-16">
+      <div class="mb-5 flex items-center gap-3">
+        <span class="grid h-8 w-8 place-items-center rounded-lg bg-red-500/12 ring-1 ring-red-500/25">
           <svg class="h-4 w-4 text-red-400" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 9v4m0 4h.01M10.3 3.9 1.8 18a2 2 0 0 0 1.7 3h17a2 2 0 0 0 1.7-3L13.7 3.9a2 2 0 0 0-3.4 0Z" stroke-linecap="round" stroke-linejoin="round"/></svg>
-        </div>
+        </span>
         <div>
-          <h3 class="text-sm font-semibold uppercase tracking-widest text-red-300">Network Security Watch</h3>
-          <p class="text-xs text-slate-500">Nodes blacklisted by the anti-fraud engine (<span id="flaggedCount">0</span> flagged).</p>
+          <h3 class="text-sm font-bold text-white">Security watch</h3>
+          <p class="text-xs text-slate-500">Nodes quarantined by the anti-fraud engine (<span id="flaggedCount">0</span>).</p>
         </div>
       </div>
-      <div id="fraudGrid" class="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3"></div>
-      <div id="fraudClear" class="rounded-2xl border border-emerald-500/20 bg-emerald-500/[.05] py-8 text-center text-sm text-emerald-300/90">
-        ✓ No fraudulent nodes detected. The network is clean.
+      <div id="fraudGrid" class="grid grid-cols-1 gap-3.5 sm:grid-cols-2 lg:grid-cols-3"></div>
+      <div id="fraudClear" class="surface rounded-2xl py-9 text-center text-sm text-emerald-300/90">✓ No fraudulent nodes detected — the network is clean.</div>
+    </section>
+
+    <!-- MCP CTA -->
+    <section id="mcp" class="mt-16 overflow-hidden rounded-3xl border border-white/10 bg-gradient-to-br from-iris-500/10 to-fuchsia-500/[.06] p-8 text-center sm:p-12">
+      <h3 class="text-2xl font-bold text-white">Search agents from your editor</h3>
+      <p class="mx-auto mt-2 max-w-lg text-sm text-slate-400">Add Beacon to Claude, Cursor, Cline or Windsurf and let your agent find other agents — one line, no API key.</p>
+      <div class="mx-auto mt-6 flex max-w-md items-center justify-between gap-3 rounded-xl border border-white/10 bg-ink-950/60 px-4 py-3 font-mono text-sm">
+        <span class="text-iris-200">npx -y beacon-mcp</span>
+        <button id="copyMcp" class="rounded-md border border-white/10 px-2.5 py-1 text-xs text-slate-400 transition hover:text-white">Copy</button>
       </div>
     </section>
   </main>
 
-  <footer class="border-t border-white/5 py-6 text-center text-xs text-slate-500">
-    Live registry · <span class="text-slate-400">registry-ruby.vercel.app</span> · Beacon
+  <footer class="border-t border-white/5 py-8 text-center text-xs text-slate-600">
+    Beacon · <span id="footCount" class="tabular-nums text-slate-400">—</span> agents indexed · <a href="https://registry-ruby.vercel.app" class="text-slate-500 hover:text-slate-300">API</a>
   </footer>
 
   <script>
     const API = "https://registry-ruby.vercel.app";
     const $ = (id) => document.getElementById(id);
-    const grid = $("grid"), loading = $("loading"), empty = $("empty");
-    const sectionTitle = $("sectionTitle"), resetBtn = $("resetBtn");
-
+    const grid = $("grid"), loading = $("loading"), empty = $("empty"), sectionTitle = $("sectionTitle"), sectionSub = $("sectionSub"), resetBtn = $("resetBtn");
     const esc = (s) => String(s ?? "").replace(/[&<>"']/g, c => ({ "&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;" }[c]));
-    const host = (u) => { try { return new URL(u).host || u; } catch { return u; } };
+    const host = (u) => { try { return new URL(u).host.replace(/^www\./, "") + new URL(u).pathname; } catch { return u; } };
+    const fmtStars = (n) => { n = Number(n) || 0; return n >= 1000 ? (n/1000).toFixed(n >= 10000 ? 0 : 1).replace(/\.0$/, "") + "k" : String(n); };
 
     function relTime(iso) {
       if (!iso) return "";
-      const then = new Date(iso).getTime();
-      if (isNaN(then)) return "";
-      const s = Math.max(0, Math.floor((Date.now() - then) / 1000));
-      if (s < 60) return `${s}s ago`;
-      const m = Math.floor(s / 60); if (m < 60) return `${m}m ago`;
-      const h = Math.floor(m / 60); if (h < 24) return `${h}h ago`;
-      const d = Math.floor(h / 24); if (d < 30) return `${d}d ago`;
-      return new Date(then).toLocaleDateString();
+      const t = new Date(iso).getTime(); if (isNaN(t)) return "";
+      const s = Math.max(0, (Date.now() - t) / 1000);
+      if (s < 60) return "just now";
+      const m = s/60; if (m < 60) return `${Math.floor(m)}m ago`;
+      const h = m/60; if (h < 24) return `${Math.floor(h)}h ago`;
+      const d = h/24; if (d < 30) return `${Math.floor(d)}d ago`;
+      return new Date(t).toLocaleDateString();
     }
-
     function animateCount(el, target) {
-      const start = parseInt(String(el.textContent).replace(/\D/g, "")) || 0;
-      const end = Number(target) || 0, dur = 700, t0 = performance.now();
-      (function step(now) {
-        const p = Math.min(1, (now - t0) / dur);
-        el.textContent = Math.round(start + (end - start) * p).toLocaleString();
-        if (p < 1) requestAnimationFrame(step);
-      })(t0);
+      const start = parseInt(String(el.textContent).replace(/\D/g, "")) || 0, end = Number(target) || 0, t0 = performance.now();
+      (function step(now){ const p = Math.min(1,(now-t0)/800); el.textContent = Math.round(start+(end-start)*(1-Math.pow(1-p,3))).toLocaleString(); if(p<1) requestAnimationFrame(step); })(t0);
     }
 
-    function badge(online) {
-      const color = online ? "bg-emerald-400" : "bg-slate-500";
-      const ring = online ? "shadow-[0_0_10px_2px_rgba(52,211,153,.7)] animate-pulseGlow" : "";
-      const text = online ? "text-emerald-300" : "text-slate-400";
-      return `<span class="inline-flex items-center gap-1.5 text-[11px] ${text}"><span class="h-2 w-2 rounded-full ${color} ${ring}"></span>${online ? "Online" : "Offline"}</span>`;
-    }
-
-    function fmtStars(n) {
-      n = Number(n) || 0;
-      return n >= 1000 ? (n / 1000).toFixed(n >= 10000 ? 0 : 1).replace(/\.0$/, "") + "k" : String(n);
-    }
-
-    function activityBadge(a) {
-      // For GitHub-sourced agents, show real maintenance status from pushed_at.
-      if (a.pushed_at) {
-        const on = !!a.active;
-        const color = on ? "bg-emerald-400" : "bg-slate-500";
-        const ring = on ? "shadow-[0_0_10px_2px_rgba(52,211,153,.7)] animate-pulseGlow" : "";
-        const text = on ? "text-emerald-300" : "text-slate-400";
-        return `<span class="inline-flex items-center gap-1.5 text-[11px] ${text}"><span class="h-2 w-2 rounded-full ${color} ${ring}"></span>${on ? "Active" : "Dormant"}</span>`;
-      }
-      return badge(a.online);
+    function statusDot(a) {
+      const on = a.pushed_at ? !!a.active : !!a.online;
+      const label = a.pushed_at ? (on ? "Active" : "Dormant") : (on ? "Online" : "Idle");
+      const c = on ? "bg-emerald-400" : "bg-slate-600";
+      const ring = on ? "shadow-[0_0_8px_1px_rgba(52,211,153,.7)]" : "";
+      const tc = on ? "text-emerald-300/90" : "text-slate-500";
+      return `<span class="inline-flex shrink-0 items-center gap-1.5 text-[11px] ${tc}"><span class="h-1.5 w-1.5 rounded-full ${c} ${ring}"></span>${label}</span>`;
     }
 
     function card(a, i) {
-      const tags = (a.capabilities_tags || []).slice(0, 6);
-      const rate = Math.round((a.success_rate ?? 0) * 100);
-      const hasGh = !!a.pushed_at || (a.stars ?? 0) > 0;
-      const footer = hasGh
-        ? `<span class="inline-flex items-center gap-1 text-[11px] text-amber-300 tabular-nums" title="GitHub stars">
-             <svg class="h-3.5 w-3.5" viewBox="0 0 24 24" fill="currentColor"><path d="m12 2 3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01Z"/></svg>${fmtStars(a.stars)}
-           </span>
-           <span class="text-[11px] text-slate-500 tabular-nums" title="Last commit">pushed ${a.pushed_at ? relTime(a.pushed_at) : "—"}</span>`
-        : `<div class="flex items-center gap-2">
-             <div class="h-1.5 w-16 overflow-hidden rounded-full bg-white/10"><div class="h-full rounded-full bg-gradient-to-r from-emerald-400 to-beacon-400" style="width:${rate}%"></div></div>
-             <span class="text-[11px] text-slate-400 tabular-nums">${rate}% rep</span>
-           </div>
-           <span class="text-[11px] text-slate-500 tabular-nums">${(a.total_transactions ?? 0).toLocaleString()} jobs</span>`;
+      const tags = (a.capabilities_tags || []).slice(0, 4);
+      const stars = (a.stars ?? 0) > 0;
       return `
-        <article class="card-hover animate-fadeUp rounded-2xl border border-white/10 bg-white/[.04] p-5" style="animation-delay:${i*25}ms">
-          <div class="flex items-start justify-between gap-3">
-            <h4 class="font-semibold text-white leading-tight">${esc(a.name)}</h4>
-            ${activityBadge(a)}
+        <article class="surface surface-hover animate-rise rounded-2xl p-4" style="animation-delay:${Math.min(i,12)*22}ms">
+          <div class="flex items-start justify-between gap-2">
+            <div class="min-w-0">
+              <h4 class="clamp1 font-semibold text-white">${esc(a.name)}</h4>
+              <a href="${esc(a.mcp_endpoint)}" target="_blank" rel="noopener" class="clamp1 mt-0.5 block text-xs text-slate-500 hover:text-iris-300">${esc(host(a.mcp_endpoint))}</a>
+            </div>
+            ${statusDot(a)}
           </div>
-          <a href="${esc(a.mcp_endpoint)}" target="_blank" rel="noopener" class="mt-1 block truncate text-xs text-beacon-300 hover:text-beacon-400">${esc(host(a.mcp_endpoint))}</a>
           <div class="mt-3 flex flex-wrap gap-1.5">
-            ${tags.map(t => `<span class="rounded-md bg-beacon-500/10 px-2 py-0.5 text-[11px] text-beacon-300 ring-1 ring-inset ring-beacon-500/20">${esc(t)}</span>`).join("")}
+            ${tags.map(t => `<span class="rounded-md bg-white/[.05] px-2 py-0.5 text-[11px] text-slate-300 ring-1 ring-inset ring-white/10">${esc(t)}</span>`).join("")}
           </div>
-          <div class="mt-4 flex items-center justify-between border-t border-white/5 pt-3">
-            ${footer}
+          <div class="mt-3.5 flex items-center justify-between border-t divide-soft pt-3 text-[11px]">
+            <span class="inline-flex items-center gap-1 ${stars ? "text-amber-300" : "text-slate-600"} tabular-nums">
+              <svg class="h-3.5 w-3.5" viewBox="0 0 24 24" fill="currentColor"><path d="m12 2 3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01Z"/></svg>${fmtStars(a.stars)}
+            </span>
+            <span class="text-slate-500">${a.pushed_at ? "pushed " + relTime(a.pushed_at) : (a.capabilities_tags||[]).length + " tags"}</span>
           </div>
         </article>`;
     }
@@ -234,143 +223,132 @@
       empty.classList.toggle("hidden", list.length > 0);
     }
 
-    // ---- Radar (live integration feed) ----
-    function radarCard(a, i) {
+    // ---- Recently-indexed feed (real crawler activity) ----
+    function feedRow(a, i) {
       const tags = (a.capabilities_tags || []).slice(0, 3);
       return `
-        <div class="animate-fadeUp rounded-xl border border-white/10 bg-white/[.03] p-3" style="animation-delay:${i*20}ms">
+        <div class="surface animate-rise rounded-xl p-3" style="animation-delay:${Math.min(i,10)*20}ms">
           <div class="flex items-center justify-between gap-2">
-            <span class="truncate text-sm font-medium text-white">${esc(a.name)}</span>
+            <span class="clamp1 text-sm font-medium text-white">${esc(a.name)}</span>
             <span class="shrink-0 text-[10px] text-emerald-400/80">${esc(relTime(a.created_at))}</span>
           </div>
-          <a href="${esc(a.mcp_endpoint)}" target="_blank" rel="noopener" class="mt-0.5 block truncate text-[11px] text-slate-500 hover:text-beacon-300">${esc(a.agent_id)}</a>
-          <div class="mt-2 flex flex-wrap gap-1">
-            ${tags.map(t => `<span class="rounded bg-emerald-500/10 px-1.5 py-0.5 text-[10px] text-emerald-300/90">${esc(t)}</span>`).join("")}
+          <div class="mt-1.5 flex items-center gap-2">
+            ${(a.stars ?? 0) > 0 ? `<span class="inline-flex items-center gap-0.5 text-[10px] text-amber-300/90"><svg class="h-3 w-3" viewBox="0 0 24 24" fill="currentColor"><path d="m12 2 3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01Z"/></svg>${fmtStars(a.stars)}</span>` : ""}
+            <div class="flex flex-wrap gap-1">${tags.map(t => `<span class="rounded bg-white/[.05] px-1.5 py-0.5 text-[10px] text-slate-400">${esc(t)}</span>`).join("")}</div>
           </div>
         </div>`;
     }
-
-    async function loadRadar() {
-      const box = $("radar"), state = $("radarState");
+    async function loadFeed() {
       try {
-        const r = await fetch(`${API}/api/v1/radar?limit=20`);
+        const r = await fetch(`${API}/api/v1/agents?sort=recent&limit=18`);
         const d = await r.json();
-        const agents = d.agents || [];
-        if (!agents.length) { box.innerHTML = ""; state.textContent = "No live nodes yet."; state.classList.remove("hidden"); return; }
-        state.classList.add("hidden");
-        box.innerHTML = agents.map(radarCard).join("");
-      } catch {
-        $("radar").innerHTML = "";
-        state.textContent = "Feed temporarily unavailable — retrying…";
-        state.classList.remove("hidden");
-      }
+        const items = d.agents || [];
+        if (!items.length) { $("feed").innerHTML = ""; $("feedState").textContent = "No activity yet."; $("feedState").classList.remove("hidden"); return; }
+        $("feedState").classList.add("hidden");
+        $("feed").innerHTML = items.map(feedRow).join("");
+      } catch { $("feed").innerHTML = ""; $("feedState").textContent = "Feed reconnecting…"; $("feedState").classList.remove("hidden"); }
     }
 
-    // ---- Fraud watch ----
+    // ---- Fraud ----
     function fraudCard(a, i) {
-      const fs = a.fraud_status || {};
-      const tags = (a.capabilities_tags || []).slice(0, 4);
+      const fs = a.fraud_status || {}, tags = (a.capabilities_tags || []).slice(0, 4);
       return `
-        <article class="fraud-card animate-fadeUp rounded-2xl border-2 border-red-600/70 bg-red-950/30 p-5" style="animation-delay:${i*25}ms">
+        <article class="animate-rise rounded-2xl border border-red-600/50 bg-red-950/25 p-4 shadow-[0_0_0_1px_rgba(220,38,38,.25)]" style="animation-delay:${i*22}ms">
           <div class="flex items-center justify-between gap-2">
-            <span class="inline-flex items-center gap-1.5 rounded-md bg-red-600/90 px-2 py-1 text-[10px] font-bold uppercase tracking-wide text-white animate-blink">🚨 Malicious / Fraud Detected</span>
+            <span class="inline-flex items-center gap-1.5 rounded-md bg-red-600 px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide text-white animate-blink">🚨 Fraud detected</span>
             <span class="text-[11px] font-semibold text-red-300 tabular-nums">${fs.strikes ?? 0} strikes</span>
           </div>
-          <h4 class="mt-3 font-semibold text-white">${esc(a.name)}</h4>
-          <a href="${esc(a.mcp_endpoint)}" target="_blank" rel="noopener" class="block truncate text-xs text-red-300/70 hover:text-red-300">${esc(host(a.mcp_endpoint))}</a>
-          <div class="mt-3 rounded-lg border border-red-600/30 bg-red-950/40 p-2.5">
-            <div class="text-[10px] uppercase tracking-widest text-red-400/70">Reason blacklisted</div>
+          <h4 class="clamp1 mt-3 font-semibold text-white">${esc(a.name)}</h4>
+          <div class="mt-2 rounded-lg border border-red-600/25 bg-red-950/40 p-2.5">
+            <div class="text-[10px] uppercase tracking-widest text-red-400/70">Reason</div>
             <div class="mt-0.5 text-xs text-red-200">${esc(fs.reason || "Repeated fraud strikes")}</div>
           </div>
-          <div class="mt-3 flex flex-wrap gap-1.5">
-            ${tags.map(t => `<span class="rounded-md bg-red-500/10 px-2 py-0.5 text-[11px] text-red-300/80 ring-1 ring-inset ring-red-500/20">${esc(t)}</span>`).join("")}
-          </div>
+          <div class="mt-2.5 flex flex-wrap gap-1.5">${tags.map(t => `<span class="rounded-md bg-red-500/10 px-2 py-0.5 text-[11px] text-red-300/80 ring-1 ring-inset ring-red-500/20">${esc(t)}</span>`).join("")}</div>
         </article>`;
     }
-
     function renderFraud(flagged) {
-      const fg = $("fraudGrid"), clear = $("fraudClear");
       $("flaggedCount").textContent = (flagged || []).length;
-      if (!flagged || !flagged.length) { fg.innerHTML = ""; clear.classList.remove("hidden"); return; }
-      clear.classList.add("hidden");
-      fg.innerHTML = flagged.map(fraudCard).join("");
+      if (!flagged || !flagged.length) { $("fraudGrid").innerHTML = ""; $("fraudClear").classList.remove("hidden"); return; }
+      $("fraudClear").classList.add("hidden");
+      $("fraudGrid").innerHTML = flagged.map(fraudCard).join("");
     }
 
-    // ---- Leaderboard (counters + board + fraud, paginated) ----
+    // ---- Browse (paginated) ----
     const PAGE_SIZE = 48;
-    let page = 0;
-    let totalCount = 0;
+    let page = 0, totalCount = 0, sortMode = "top", searching = false;
 
+    function setStat(n) { totalCount = n; animateCount($("navCountNum"), n); animateCount($("footCount"), n); $("navCount").classList.remove("hidden"); }
     function renderPager() {
-      const pager = $("pager");
       const pages = Math.max(1, Math.ceil(totalCount / PAGE_SIZE));
-      $("pageInfo").textContent =
-        `Page ${page + 1} of ${pages.toLocaleString()} · ${totalCount.toLocaleString()} agents`;
-      $("prevBtn").disabled = page <= 0;
-      $("nextBtn").disabled = page >= pages - 1;
-      pager.classList.remove("hidden");
-      pager.classList.add("flex");
+      $("pageInfo").textContent = `Page ${page + 1} of ${pages.toLocaleString()}`;
+      $("prevBtn").disabled = page <= 0; $("nextBtn").disabled = page >= pages - 1;
+      $("pager").classList.remove("hidden"); $("pager").classList.add("flex");
     }
 
-    async function loadLeaderboard() {
-      sectionTitle.textContent = "Browse all agents";
+    async function loadBrowse() {
+      searching = false;
+      sectionTitle.textContent = sortMode === "recent" ? "Recently indexed" : "Top agents";
+      sectionSub.textContent = sortMode === "recent" ? "Newest agents in the index" : "Ranked by reputation & GitHub stars";
       resetBtn.classList.add("hidden");
       loading.classList.remove("hidden");
       try {
-        const r = await fetch(`${API}/api/v1/leaderboard?limit=${PAGE_SIZE}&offset=${page * PAGE_SIZE}`);
-        const d = await r.json();
-        totalCount = d.total_count || 0;
-        animateCount($("cGlobal"), d.total_count);
-        animateCount($("cScraped"), d.scraped_registrations);
-        render(d.leaderboard || []);
-        renderFraud(d.flagged_agents || []);
-        renderPager();
-        window.scrollTo({ top: 0, behavior: "smooth" });
-      } catch {
-        loading.textContent = "Could not reach the registry.";
-      }
+        const [lb, list] = await Promise.all([
+          fetch(`${API}/api/v1/leaderboard?limit=1`).then(r => r.json()),
+          fetch(`${API}/api/v1/agents?sort=${sortMode}&limit=${PAGE_SIZE}`).then(r => r.json()).catch(() => null),
+        ]);
+        setStat(lb.total_count || 0);
+        renderFraud(lb.flagged_agents || []);
+        // "Top" uses paginated leaderboard; "Recent" uses the agents feed (page 0 only).
+        if (sortMode === "top") {
+          const pg = await fetch(`${API}/api/v1/leaderboard?limit=${PAGE_SIZE}&offset=${page * PAGE_SIZE}`).then(r => r.json());
+          render(pg.leaderboard || []);
+          renderPager();
+        } else {
+          render((list && list.agents) || []);
+          $("pager").classList.add("hidden");
+        }
+      } catch { loading.textContent = "Could not reach the registry."; }
     }
-
     function goPage(delta) {
       const pages = Math.max(1, Math.ceil(totalCount / PAGE_SIZE));
       const next = Math.min(Math.max(0, page + delta), pages - 1);
-      if (next === page) return;
-      page = next;
-      loadLeaderboard();
+      if (next === page) return; page = next; loadBrowse(); window.scrollTo({ top: 0, behavior: "smooth" });
     }
 
     async function search(q) {
-      if (!q.trim()) { page = 0; return loadLeaderboard(); }
-      sectionTitle.textContent = `Results for “${q}”`;
-      resetBtn.classList.remove("hidden");
-      $("pager").classList.add("hidden");        // search returns ranked matches, not pages
-      loading.classList.remove("hidden");
-      grid.innerHTML = ""; empty.classList.add("hidden");
+      if (!q.trim()) { page = 0; return loadBrowse(); }
+      searching = true;
+      sectionTitle.textContent = `Results for “${q}”`; sectionSub.textContent = "Matched by capability";
+      resetBtn.classList.remove("hidden"); $("pager").classList.add("hidden");
+      loading.classList.remove("hidden"); grid.innerHTML = ""; empty.classList.add("hidden");
       try {
-        const r = await fetch(`${API}/api/v1/discover`, {
-          method: "POST", headers: { "content-type": "application/json" },
-          body: JSON.stringify({ query: q, limit: 48 }),
-        });
-        const d = await r.json();
+        const d = await fetch(`${API}/api/v1/discover`, { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ query: q, limit: 48 }) }).then(r => r.json());
         render(d.results || []);
-      } catch {
-        loading.textContent = "Search failed. Try again.";
-      }
+      } catch { loading.textContent = "Search failed. Try again."; }
     }
 
+    // Wiring
     $("searchForm").addEventListener("submit", (e) => { e.preventDefault(); search($("searchInput").value); });
-    resetBtn.addEventListener("click", () => { $("searchInput").value = ""; page = 0; loadLeaderboard(); });
+    resetBtn.addEventListener("click", () => { $("searchInput").value = ""; page = 0; loadBrowse(); });
     $("prevBtn").addEventListener("click", () => goPage(-1));
     $("nextBtn").addEventListener("click", () => goPage(1));
+    $("sortToggle").addEventListener("click", (e) => {
+      const b = e.target.closest("button[data-sort]"); if (!b || searching) return;
+      sortMode = b.dataset.sort; page = 0;
+      [...$("sortToggle").children].forEach(x => { const on = x === b; x.className = `rounded-md px-3 py-1.5 transition ${on ? "font-medium text-white bg-white/10" : "text-slate-400 hover:text-white"}`; });
+      loadBrowse();
+    });
+    $("copyMcp").addEventListener("click", () => { navigator.clipboard?.writeText("npx -y beacon-mcp"); $("copyMcp").textContent = "Copied ✓"; setTimeout(() => $("copyMcp").textContent = "Copy", 1500); });
 
-    const chips = ["mcp server", "crypto trading", "pdf extraction", "auditing", "multi-agent", "langchain"];
-    $("chips").innerHTML = chips.map(c => `<button class="rounded-full border border-white/10 bg-white/5 px-3 py-1 text-slate-300 transition hover:border-beacon-400/50 hover:text-white">${c}</button>`).join("");
+    const chips = ["mcp server", "web scraping", "pdf extraction", "trading bot", "multi-agent", "rag"];
+    $("chips").innerHTML = chips.map(c => `<button class="rounded-full border border-white/10 bg-white/[.03] px-3 py-1.5 text-slate-400 transition hover:border-iris-400/40 hover:text-white">${c}</button>`).join("");
     $("chips").addEventListener("click", (e) => { if (e.target.tagName === "BUTTON") { $("searchInput").value = e.target.textContent; search(e.target.textContent); } });
 
-    // Initial load + periodic radar refresh (feed feel), guarded against blips.
-    loadLeaderboard();
-    loadRadar();
-    setInterval(loadRadar, 30000);
+    // init sort toggle active state
+    [...$("sortToggle").children][0].className = "rounded-md px-3 py-1.5 font-medium text-white bg-white/10 transition";
+    loadBrowse();
+    loadFeed();
+    setInterval(loadFeed, 25000);
   </script>
 </body>
 </html>

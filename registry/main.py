@@ -727,13 +727,16 @@ def leaderboard(limit: int = 50, offset: int = 0, online_only: bool = False) -> 
 
 
 @app.get("/api/v1/agents")
-def list_agents(limit: int = 100, online_only: bool = False) -> dict:
+def list_agents(limit: int = 100, online_only: bool = False, sort: str = "top") -> dict:
+    """sort=top (reputation/stars) or sort=recent (newest indexed first)."""
     _ensure_ready()
     limit = max(1, min(limit, 500))
-    rows = turso.execute(
-        "SELECT * FROM agents ORDER BY success_rate DESC, total_transactions DESC LIMIT ?",
-        [limit],
+    order = (
+        "created_at DESC"
+        if sort == "recent"
+        else "is_fraudulent ASC, success_rate DESC, stars DESC, total_transactions DESC"
     )
+    rows = turso.execute(f"SELECT * FROM agents ORDER BY {order} LIMIT ?", [limit])
     agents = [_row_to_public(r) for r in rows]
     if online_only:
         agents = [a for a in agents if a["online"]]
