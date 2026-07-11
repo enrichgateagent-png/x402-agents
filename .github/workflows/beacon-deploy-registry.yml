@@ -1,0 +1,57 @@
+# Deploy Beacon registry to GCP VM after code changes.
+# Requires repo secret GCP_SSH_KEY (private key for areej@34.45.7.252).
+name: Deploy registry to GCP
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [master]
+    paths:
+      - "registry/main.py"
+      - "registry/analytics.py"
+      - "registry/turso.py"
+      - "scripts/start-beacon.sh"
+      - "scripts/hotfix_deploy_registry.sh"
+      - ".github/workflows/beacon-deploy-registry.yml"
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Upload registry files
+        uses: appleboy/scp-action@v0.1.7
+        with:
+          host: 34.45.7.252
+          username: areej
+          key: ${{ secrets.GCP_SSH_KEY }}
+          source: "registry/main.py,registry/analytics.py"
+          target: "x402-agents/registry/"
+
+      - name: Upload start script
+        uses: appleboy/scp-action@v0.1.7
+        with:
+          host: 34.45.7.252
+          username: areej
+          key: ${{ secrets.GCP_SSH_KEY }}
+          source: "scripts/start-beacon.sh"
+          target: "/home/areej/"
+
+      - name: Restart PM2
+        uses: appleboy/ssh-action@v1.0.3
+        with:
+          host: 34.45.7.252
+          username: areej
+          key: ${{ secrets.GCP_SSH_KEY }}
+          script: |
+            export PATH="$HOME/.nvm/versions/node/v20.20.2/bin:$HOME/beacon-venv/bin:$PATH"
+            mv -f ~/start-beacon.sh ~/start-beacon.sh 2>/dev/null || true
+            chmod +x ~/start-beacon.sh 2>/dev/null || true
+            if [[ -f ~/x402-agents/ecosystem.config.cjs ]]; then
+              sed -i 's/--workers 2/--workers 1/g' ~/x402-agents/ecosystem.config.cjs
+              sed -i 's|PUBLIC_BASE_URL: "http://[^"]*"|PUBLIC_BASE_URL: "https://registry-ruby.vercel.app"|g' ~/x402-agents/ecosystem.config.cjs
+            fi
+            pm2 restart beacon-registry
+            sleep 3
+            curl -fsS http://127.0.0.1:8000/healthz | head -c 300
