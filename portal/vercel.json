@@ -2,18 +2,6 @@
   "$schema": "https://openapi.vercel.sh/vercel.json",
   "rewrites": [
     {
-      "source": "/api/admin/:path*",
-      "destination": "http://34.45.7.252:8000/api/admin/:path*"
-    },
-    {
-      "source": "/api/v1/:path*",
-      "destination": "http://34.45.7.252:8000/api/v1/:path*"
-    },
-    {
-      "source": "/healthz",
-      "destination": "http://34.45.7.252:8000/healthz"
-    },
-    {
       "source": "/discover/:path*",
       "destination": "http://34.45.7.252:8000/discover/:path*"
     },
@@ -24,6 +12,18 @@
     {
       "source": "/robots.txt",
       "destination": "http://34.45.7.252:8000/robots.txt"
+    },
+    {
+      "source": "/api/admin/:path*",
+      "destination": "http://34.45.7.252:8000/api/admin/:path*"
+    },
+    {
+      "source": "/api/v1/:path*",
+      "destination": "http://34.45.7.252:8000/api/v1/:path*"
+    },
+    {
+      "source": "/healthz",
+      "destination": "http://34.45.7.252:8000/healthz"
     }
   ]
 }

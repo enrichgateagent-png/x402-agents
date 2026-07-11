@@ -53,6 +53,7 @@
     .dock-scroll::-webkit-scrollbar-thumb { background: #2a3344; border-radius: 4px; }
     .search-glow:focus-within { box-shadow: 0 0 0 1px rgba(34,211,238,.3), 0 8px 32px rgba(0,0,0,.4); }
     kbd { font-family: "IBM Plex Mono", monospace; }
+    .trend-card { min-width: 220px; scroll-snap-align: start; }
   </style>
 </head>
 <body class="min-h-screen font-sans text-slate-200 antialiased radar-bg">
@@ -141,6 +142,15 @@
               <div class="text-[11px] text-slate-500">In your dock</div>
             </div>
           </div>
+        </section>
+
+        <!-- Trending this week -->
+        <section id="trendingSection" class="mb-6 hidden">
+          <div class="mb-3 flex items-center justify-between gap-2">
+            <h2 class="text-sm font-semibold text-white">Trending this week</h2>
+            <span class="text-xs text-slate-500">Star milestones and active repos</span>
+          </div>
+          <div id="trendingStrip" class="flex gap-3 overflow-x-auto pb-1 snap-x snap-mandatory"></div>
         </section>
 
         <!-- Filter bar (sticky context when browsing results) -->
@@ -303,6 +313,38 @@
             active_agents_90d: h.active_agents_90d,
           });
         }
+      } catch {}
+    }
+
+    function trendingBadge(type) {
+      const map = {
+        star_milestone: "bg-pulse-amber/15 text-pulse-amber",
+        star_surge: "bg-pulse-violet/15 text-pulse-violet",
+        recent_push: "bg-emerald-500/15 text-emerald-300",
+      };
+      return map[type] || "bg-void-lift text-slate-400";
+    }
+
+    function trendingCard(a) {
+      const t = a.trending || {};
+      const stars = a.stars ? `★ ${fmtStars(a.stars)}` : "";
+      return `
+        <button type="button" class="trend-card trend-pick shrink-0 rounded-xl border border-void-line bg-void-card p-3 text-left transition hover:border-pulse-cyan/30" data-agent='${esc(JSON.stringify(a))}'>
+          <div class="truncate text-sm font-medium text-white">${esc(a.name)}</div>
+          <div class="mt-1 truncate font-mono text-[10px] text-slate-500">${esc(a.agent_id)}</div>
+          <div class="mt-2 flex flex-wrap items-center gap-2 text-[10px]">
+            <span class="rounded-full px-2 py-0.5 ${trendingBadge(t.event_type)}">${esc(t.detail || "Trending")}</span>
+            ${stars ? `<span class="text-slate-500">${stars}</span>` : ""}
+          </div>
+        </button>`;
+    }
+
+    async function loadTrending() {
+      try {
+        const d = await fetch(`${API}/api/v1/growth/trending?limit=8`).then((r) => r.json());
+        if (!d.ok || !(d.trending || []).length) return;
+        $("trendingSection").classList.remove("hidden");
+        $("trendingStrip").innerHTML = d.trending.map(trendingCard).join("");
       } catch {}
     }
 
@@ -664,6 +706,13 @@
       else inspect(a);
     });
 
+    $("trendingStrip").addEventListener("click", (e) => {
+      const card = e.target.closest(".trend-pick");
+      if (!card) return;
+      const a = parseAgentFromEl(e.target);
+      if (a) inspect(a);
+    });
+
     $("dockList").addEventListener("click", (e) => {
       if (e.target.closest(".remove-dock")) { removeFromDock(e.target.closest(".remove-dock").dataset.id); return; }
       const row = e.target.closest("[data-dock-id]");
@@ -700,6 +749,7 @@
     loadDock();
     (async () => {
       await refreshRegistryCount();
+      await loadTrending();
       try {
         const last = sessionStorage.getItem("beacon:lastQ");
         if (last) $("searchInput").value = last;
