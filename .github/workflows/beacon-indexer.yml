@@ -32,7 +32,8 @@ jobs:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           # Override if your registry URL changes; secret takes precedence.
           REGISTRY_URL: ${{ secrets.REGISTRY_URL || 'https://registry-ruby.vercel.app' }}
-          MAX_PER_QUERY: "80"
+          MAX_PAGES: "10"
+          MAX_PER_QUERY: "1000"
           THROTTLE_SECS: "2"
         run: python scraper_agent.py
 

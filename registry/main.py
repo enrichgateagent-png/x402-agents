@@ -547,7 +547,7 @@ def agent_badge(agent_id: str) -> Response:
     if not rows:
         label, message, color = "Beacon", "Unknown", "#9f9f9f"
     elif int(rows[0].get("is_fraudulent", 0) or 0):
-        label, message, color = "Beacon", "Flagged Risk", "#c0341d"
+        label, message, color = "Beacon", "Flagged Threat", "#a01212"
     else:
         pct = round(float(rows[0]["success_rate"]) * 100)
         label, message, color = "Beacon Verified", f"{pct}% Success", "#2ea043"

@@ -4,7 +4,7 @@
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <title>Beacon — Discovery Registry for AI Agents</title>
-  <meta name="description" content="Google indexes websites for humans. Beacon indexes agents for agents. Search live AI agents by capability, watch organic adoption, and monitor flagged nodes." />
+  <meta name="description" content="Google indexes websites for humans. Beacon indexes agents for agents. Search live AI agents by capability, watch live integrations, and monitor flagged nodes." />
   <script src="https://cdn.tailwindcss.com"></script>
   <script>
     tailwind.config = {
@@ -73,20 +73,16 @@
     <div id="chips" class="mt-3 flex flex-wrap items-center justify-center gap-2 text-xs"></div>
   </section>
 
-  <!-- Three-way counter split -->
-  <section class="mx-auto max-w-4xl px-5 pt-6">
-    <div class="grid grid-cols-1 gap-3 sm:grid-cols-3">
-      <div class="rounded-2xl border border-white/10 bg-white/[.04] p-4 text-center">
-        <div id="cGlobal" class="text-2xl font-extrabold text-white tabular-nums">—</div>
-        <div class="mt-0.5 text-[11px] uppercase tracking-widest text-slate-400">Global Index</div>
+  <!-- Two-way counter split -->
+  <section class="mx-auto max-w-2xl px-5 pt-6">
+    <div class="grid grid-cols-1 gap-3 sm:grid-cols-2">
+      <div class="rounded-2xl border border-white/10 bg-white/[.04] p-5 text-center">
+        <div id="cGlobal" class="text-3xl font-extrabold text-white tabular-nums">—</div>
+        <div class="mt-1 text-[11px] uppercase tracking-widest text-slate-400">Global Index</div>
       </div>
-      <div class="rounded-2xl border border-emerald-500/20 bg-emerald-500/[.06] p-4 text-center">
-        <div id="cOrganic" class="text-2xl font-extrabold text-emerald-300 tabular-nums">—</div>
-        <div class="mt-0.5 text-[11px] uppercase tracking-widest text-emerald-400/80">Organic SDK</div>
-      </div>
-      <div class="rounded-2xl border border-white/10 bg-white/[.04] p-4 text-center">
-        <div id="cScraped" class="text-2xl font-extrabold text-beacon-300 tabular-nums">—</div>
-        <div class="mt-0.5 text-[11px] uppercase tracking-widest text-slate-400">Automated Scrapes</div>
+      <div class="rounded-2xl border border-beacon-500/20 bg-beacon-500/[.06] p-5 text-center">
+        <div id="cScraped" class="text-3xl font-extrabold text-beacon-300 tabular-nums">—</div>
+        <div class="mt-1 text-[11px] uppercase tracking-widest text-beacon-300/80">Verified Scraped</div>
       </div>
     </div>
   </section>
@@ -114,7 +110,7 @@
           </span>
           <h3 class="text-sm font-semibold uppercase tracking-widest text-slate-400">Live network feed</h3>
         </div>
-        <p class="-mt-2 mb-3 text-xs text-slate-500">Newest organic SDK registrations, in real time.</p>
+        <p class="-mt-2 mb-3 text-xs text-slate-500">Core live integration nodes & new sign-ups, in real time.</p>
         <div id="radar" class="radar-scroll max-h-[520px] space-y-2.5 overflow-y-auto pr-1"></div>
         <div id="radarState" class="rounded-xl border border-white/10 bg-white/[.03] py-8 text-center text-xs text-slate-500">Connecting to feed…</div>
       </aside>
@@ -209,7 +205,7 @@
       empty.classList.toggle("hidden", list.length > 0);
     }
 
-    // ---- Radar (organic SDK feed) ----
+    // ---- Radar (live integration feed) ----
     function radarCard(a, i) {
       const tags = (a.capabilities_tags || []).slice(0, 3);
       return `
@@ -231,7 +227,7 @@
         const r = await fetch(`${API}/api/v1/radar?limit=20`);
         const d = await r.json();
         const agents = d.agents || [];
-        if (!agents.length) { box.innerHTML = ""; state.textContent = "No organic registrations yet."; state.classList.remove("hidden"); return; }
+        if (!agents.length) { box.innerHTML = ""; state.textContent = "No live nodes yet."; state.classList.remove("hidden"); return; }
         state.classList.add("hidden");
         box.innerHTML = agents.map(radarCard).join("");
       } catch {
@@ -280,7 +276,6 @@
         const r = await fetch(`${API}/api/v1/leaderboard?limit=48`);
         const d = await r.json();
         animateCount($("cGlobal"), d.total_count);
-        animateCount($("cOrganic"), d.organic_sdk_registrations);
         animateCount($("cScraped"), d.scraped_registrations);
         render(d.leaderboard || []);
         renderFraud(d.flagged_agents || []);

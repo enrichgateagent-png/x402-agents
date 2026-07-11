@@ -38,8 +38,8 @@ import requests
 REGISTRY_URL = os.environ.get("REGISTRY_URL", "https://registry-ruby.vercel.app").rstrip("/")
 REGISTER_ENDPOINT = f"{REGISTRY_URL}/api/v1/register"
 GITHUB_TOKEN = os.environ.get("GITHUB_TOKEN", "").strip()
-MAX_PER_QUERY = int(os.environ.get("MAX_PER_QUERY", "300"))
-MAX_PAGES = int(os.environ.get("MAX_PAGES", "3"))  # parse up to page=3 per query
+MAX_PER_QUERY = int(os.environ.get("MAX_PER_QUERY", "1000"))
+MAX_PAGES = int(os.environ.get("MAX_PAGES", "10"))  # deep sweep to page=10 (GitHub's 1000-result cap)
 THROTTLE_SECS = float(os.environ.get("THROTTLE_SECS", "2"))
 GITHUB_SEARCH_URL = "https://api.github.com/search/repositories"
 PER_PAGE = 100
