@@ -59,6 +59,22 @@ def _normalize_tags(raw: str) -> str:
     return ",".join(seen)
 
 
+ACTIVE_WINDOW_DAYS = int(os.environ.get("ACTIVE_WINDOW_DAYS", "90"))
+
+
+def _pushed_recently(pushed_at: Optional[str]) -> bool:
+    """True if the repo saw native activity within ACTIVE_WINDOW_DAYS."""
+    if not pushed_at:
+        return False
+    try:
+        dt = datetime.fromisoformat(pushed_at.replace("Z", "+00:00"))
+        if dt.tzinfo is None:
+            dt = dt.replace(tzinfo=timezone.utc)
+        return (_utcnow() - dt).days <= ACTIVE_WINDOW_DAYS
+    except (TypeError, ValueError):
+        return False
+
+
 def _row_to_public(row: dict) -> dict:
     last_seen = row["last_seen"]
     recent = False
@@ -88,6 +104,11 @@ def _row_to_public(row: dict) -> dict:
         "last_validated": row.get("last_validated"),
         "registration_source": row.get("registration_source", "sdk"),
         "online": online,
+        # Real GitHub traction (populated by enrich_github.py for scraped repos).
+        "stars": int(row.get("stars", 0) or 0),
+        "pushed_at": row.get("pushed_at"),
+        "open_issues": int(row.get("open_issues", 0) or 0),
+        "active": _pushed_recently(row.get("pushed_at")),
         "fraud_status": {
             "is_flagged": bool(int(row.get("is_fraudulent", 0) or 0)),
             "strikes": int(row.get("fraud_strikes", 0) or 0),
@@ -645,7 +666,7 @@ def leaderboard(limit: int = 50, online_only: bool = False) -> dict:
     # "FRAUD WARNING" badge via each row's fraud_status.
     rows = turso.execute(
         "SELECT * FROM agents "
-        "ORDER BY is_fraudulent ASC, success_rate DESC, total_transactions DESC LIMIT ?",
+        "ORDER BY is_fraudulent ASC, success_rate DESC, stars DESC, total_transactions DESC LIMIT ?",
         [limit],
     )
     board = [_row_to_public(r) for r in rows]

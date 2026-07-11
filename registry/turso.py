@@ -128,6 +128,11 @@ def ensure_schema() -> None:
         "ALTER TABLE agents ADD COLUMN fraud_strikes INTEGER NOT NULL DEFAULT 0",
         "ALTER TABLE agents ADD COLUMN is_fraudulent INTEGER NOT NULL DEFAULT 0",
         "ALTER TABLE agents ADD COLUMN fraud_reason TEXT",
+        # Real GitHub traction signals (honestly labeled, kept separate from the
+        # agent-telemetry reputation columns).
+        "ALTER TABLE agents ADD COLUMN stars INTEGER NOT NULL DEFAULT 0",
+        "ALTER TABLE agents ADD COLUMN pushed_at TEXT",
+        "ALTER TABLE agents ADD COLUMN open_issues INTEGER NOT NULL DEFAULT 0",
     ):
         try:
             execute(ddl)
