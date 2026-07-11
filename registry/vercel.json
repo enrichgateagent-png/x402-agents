@@ -1,9 +1,11 @@
 {
   "$schema": "https://openapi.vercel.sh/vercel.json",
   "rewrites": [
-    {
-      "source": "/(.*)",
-      "destination": "http://34.67.113.114:8000/$1"
-    }
+    { "source": "/(.*)", "destination": "http://34.67.113.114:8000/$1" }
+  ],
+  "headers": [
+    { "source": "/api/v1/search", "headers": [{ "key": "Cache-Control", "value": "public, s-maxage=30, stale-while-revalidate=120" }] },
+    { "source": "/api/v1/discovery", "headers": [{ "key": "Cache-Control", "value": "public, s-maxage=60, stale-while-revalidate=300" }] },
+    { "source": "/discover/(.*)", "headers": [{ "key": "Cache-Control", "value": "public, s-maxage=300, stale-while-revalidate=600" }] }
   ]
 }
