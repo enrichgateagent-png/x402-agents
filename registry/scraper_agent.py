@@ -363,7 +363,7 @@ def run_once() -> dict:
                 except Exception as exc:  # bulletproof per-repo isolation
                     stats["failed"] += 1
                     log.error("unexpected error indexing %s: %s", slug, exc)
-                time.sleep(0.3)  # be gentle on our own registry
+                time.sleep(0.08)  # light pacing on our own registry (it handles this fine)
         except Exception as exc:  # a bad query must never kill the whole run
             log.error("query '%s' aborted: %s", query, exc)
             continue

@@ -3,7 +3,7 @@ name: Beacon Indexer
 # Zero-cost continuous harvesting on GitHub's free Actions runners.
 on:
   schedule:
-    - cron: "0 */6 * * *"   # every 6 hours (UTC)
+    - cron: "17 */4 * * *"   # every 4 hours (public repo = unlimited Actions); :17 avoids the cron rush
   workflow_dispatch: {}       # allow manual runs from the Actions tab
 
 concurrency:
@@ -13,7 +13,7 @@ concurrency:
 jobs:
   harvest:
     runs-on: ubuntu-latest
-    timeout-minutes: 30
+    timeout-minutes: 120       # let a full sweep finish instead of being cancelled
     steps:
       - uses: actions/checkout@v4
 
@@ -34,7 +34,7 @@ jobs:
           REGISTRY_URL: ${{ secrets.REGISTRY_URL || 'https://registry-ruby.vercel.app' }}
           MAX_PAGES: "10"
           MAX_PER_QUERY: "1000"
-          THROTTLE_SECS: "2"
+          THROTTLE_SECS: "1"
         run: python scraper_agent.py
 
       - name: Refresh reachability matrix
