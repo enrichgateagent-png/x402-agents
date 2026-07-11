@@ -105,6 +105,7 @@
             <button id="resetBtn" class="hidden text-xs text-iris-300 hover:text-iris-400">← all agents</button>
             <div id="sortToggle" class="inline-flex rounded-lg border border-white/10 bg-white/[.03] p-0.5 text-xs">
               <button data-sort="top" class="rounded-md px-3 py-1.5 font-medium text-white transition">Top</button>
+              <button data-sort="health" class="rounded-md px-3 py-1.5 text-slate-400 transition hover:text-white">Healthy</button>
               <button data-sort="recent" class="rounded-md px-3 py-1.5 text-slate-400 transition hover:text-white">Recent</button>
             </div>
           </div>
@@ -290,8 +291,14 @@
 
     async function loadBrowse() {
       searching = false;
-      sectionTitle.textContent = sortMode === "recent" ? "Recently indexed" : "Top agents";
-      sectionSub.textContent = sortMode === "recent" ? "Newest agents in the index" : "Ranked by reputation & GitHub stars";
+      const titles = { recent: "Recently indexed", health: "Healthiest agents", top: "Top agents" };
+      const subs = {
+        recent: "Newest agents in the index",
+        health: "Actively maintained — freshness over raw stars",
+        top: "Ranked by reputation & GitHub stars",
+      };
+      sectionTitle.textContent = titles[sortMode] || titles.top;
+      sectionSub.textContent = subs[sortMode] || subs.top;
       resetBtn.classList.add("hidden");
       loading.classList.remove("hidden");
       try {
