@@ -36,15 +36,17 @@ import turso
 
 import logging
 
-PUBLIC_BASE_URL = os.environ.get("PUBLIC_BASE_URL", "http://34.45.7.252:8000").rstrip("/")
+PUBLIC_BASE_URL = os.environ.get("PUBLIC_BASE_URL", "https://registry-ruby.vercel.app").rstrip("/")
 PORTAL_URL = os.environ.get("PORTAL_URL", "https://portal-five-phi-54.vercel.app").rstrip("/")
 MCP_SSE_URL = os.environ.get("MCP_SSE_URL", "http://34.45.7.252:8001/sse").rstrip("/")
 
 _TAG_CACHE_TTL_SECS = int(os.environ.get("TAG_CACHE_TTL_SECS", "3600"))
 _FTS_TOKEN = re.compile(r"[\w\-]+", re.UNICODE)
 
-# In-memory top-tags cache — warmed on startup, refreshed hourly.
+# In-memory top-tags cache — warmed on first /discovery, refreshed hourly.
 _tag_cache: dict = {"tags": [], "categories": [], "built_at": None, "total_agents": 0}
+_source_cache: dict = {"total": 0, "scraped": 0, "organic": 0, "at": 0.0}
+_SOURCE_CACHE_TTL = int(os.environ.get("SOURCE_COUNT_CACHE_TTL", "60"))
 
 logging.basicConfig(level=logging.INFO, format="%(levelname)s %(message)s")
 logger = logging.getLogger("beacon")
@@ -88,7 +90,6 @@ def _ensure_ready() -> None:
         turso.ensure_schema()
         analytics.ensure_analytics_schema()
         trending.ensure_trending_schema()
-        _refresh_tag_cache(force=True)
         _schema_ready = True
 
 
@@ -539,10 +540,17 @@ async def _access_log_middleware(request: Request, call_next):
     ua = request.headers.get("user-agent") or ""
     client_class = _classify_client(ua)
     response = await call_next(request)
-    try:
-        analytics.log_request(request, client_class)
-    except Exception:
-        pass
+    # Fire-and-forget — never block the response on analytics writes.
+    if request.url.path.startswith("/api/") and not request.url.path.startswith("/api/v1/register"):
+        try:
+            import threading
+            threading.Thread(
+                target=analytics.log_request,
+                args=(request, client_class),
+                daemon=True,
+            ).start()
+        except Exception:
+            pass
     return response
 
 
@@ -581,10 +589,16 @@ def root() -> dict:
 
 def _source_counts() -> tuple[int, int, int]:
     """Return (total, scraped, organic_sdk) from the live DB."""
+    now = time.time()
+    if now - _source_cache["at"] < _SOURCE_CACHE_TTL:
+        return _source_cache["total"], _source_cache["scraped"], _source_cache["organic"]
     rows = turso.execute("SELECT registration_source AS s, COUNT(*) AS c FROM agents GROUP BY registration_source")
     by = {r["s"] or "sdk": int(r["c"]) for r in rows}
     total = sum(by.values())
-    return total, by.get("scraper", 0), by.get("sdk", 0)
+    scraped = by.get("scraper", 0)
+    organic = by.get("sdk", 0)
+    _source_cache.update(total=total, scraped=scraped, organic=organic, at=now)
+    return total, scraped, organic
 
 
 @app.get("/llms.txt")
@@ -1000,47 +1014,35 @@ def _expand_tokens(tokens: list[str]) -> list[str]:
 @app.post("/api/v1/discover")
 def discover(req: DiscoverRequest, request: Request) -> dict:
     """
-    Capability search ranked by match score, then success_rate, then volume.
-
-    Two-stage: literal keyword scoring first. If that yields few results, expand
-    the query through a semantic synonym map and re-score with a lower weight, so
-    cross-cutting matches surface even when word-for-word matching is zero —
-    without diluting precise queries that already match well.
-
-    Every hit is logged with a User-Agent classification so we can see when AI
-    crawlers / agent clients (vs browsers) are querying the index.
+    Capability search — FTS-backed (sub-second at 19k+ rows).
+    Falls back to semantic synonym expansion via a second FTS query when sparse.
     """
     _ensure_ready()
     ua = request.headers.get("user-agent", "")
     client = _classify_client(ua)
-    logger.info("discover client=%s query=%r ua=%r", client, req.query[:120], ua[:160])
-    query_tokens = [t for t in _TAG_SPLIT.split(req.query.lower()) if t]
-    rows = turso.execute("SELECT * FROM agents")
 
-    # Stage 1 — literal match (exact tag = 2, substring = 1).
-    combined = _score_rows(rows, query_tokens, req.online_only, 2, 1)
+    pool = max(req.limit * 3, 25)
+    results = _search_agents_core(req.query, limit=pool)
+    if req.online_only:
+        results = [r for r in results if r.get("online")]
 
-    # Stage 2 — semantic fallback when literal results are sparse.
     semantic_expanded = False
-    SEMANTIC_MIN = 3
-    if len(combined) < SEMANTIC_MIN:
+    if len(results) < 3:
+        query_tokens = [t for t in _TAG_SPLIT.split(req.query.lower()) if t]
         expanded = _expand_tokens(query_tokens)
         if expanded:
             semantic_expanded = True
-            for agent_id, (score, pub) in _score_rows(rows, expanded, req.online_only, 1, 1).items():
-                if agent_id in combined:
-                    # keep the stronger (literal) score if already matched
-                    if score > combined[agent_id][0]:
-                        combined[agent_id] = (score, pub)
-                else:
-                    combined[agent_id] = (score, pub)
+            syn_q = " ".join(expanded[:8])
+            extra = _search_agents_core(syn_q, limit=pool)
+            if req.online_only:
+                extra = [r for r in extra if r.get("online")]
+            seen = {r["agent_id"] for r in results}
+            for row in extra:
+                if row["agent_id"] not in seen:
+                    results.append(row)
+                    seen.add(row["agent_id"])
 
-    scored = sorted(
-        combined.values(),
-        key=lambda x: (x[0], x[1]["success_rate"], x[1]["total_transactions"]),
-        reverse=True,
-    )
-    results = [pub for _, pub in scored[: req.limit]]
+    results = results[: req.limit]
     return {
         "ok": True,
         "count": len(results),
@@ -1248,7 +1250,12 @@ def validate_batch(limit: int = 25) -> dict:
 
 
 @app.get("/api/v1/leaderboard")
-def leaderboard(limit: int = 50, offset: int = 0, online_only: bool = False) -> dict:
+def leaderboard(
+    limit: int = 50,
+    offset: int = 0,
+    online_only: bool = False,
+    include_flagged: bool = False,
+) -> dict:
     """
     Public leaderboard: top agents ranked by reputation (success_rate DESC, then
     volume). Returns a flat JSON array plus a top-level total_count of every
@@ -1258,22 +1265,15 @@ def leaderboard(limit: int = 50, offset: int = 0, online_only: bool = False) -> 
     limit = max(1, min(limit, 500))
     offset = max(0, offset)
 
-    # Split-metrics summary: total + organic (sdk) vs scraped registrations.
-    src_rows = turso.execute(
-        "SELECT registration_source AS s, COUNT(*) AS c FROM agents GROUP BY registration_source"
-    )
-    by_source = {r["s"] or "sdk": int(r["c"]) for r in src_rows}
-    total_count = sum(by_source.values())
+    total_count, organic_sdk, scraped = _source_counts()
+    by_source = {"sdk": organic_sdk, "scraper": scraped}
     summary = {
         "total_agents": total_count,
-        "organic_sdk_registrations": by_source.get("sdk", 0),
-        "scraped_registrations": by_source.get("scraper", 0),
+        "organic_sdk_registrations": organic_sdk,
+        "scraped_registrations": scraped,
         "by_source": by_source,
     }
 
-    # Defense: flagged agents are drastically demoted (is_fraudulent ASC sinks
-    # them to the bottom) but still returned so the portal can render a red
-    # "FRAUD WARNING" badge via each row's fraud_status.
     rows = turso.execute(
         "SELECT * FROM agents "
         "ORDER BY is_fraudulent ASC, success_rate DESC, stars DESC, total_transactions DESC "
@@ -1284,24 +1284,21 @@ def leaderboard(limit: int = 50, offset: int = 0, online_only: bool = False) -> 
     if online_only:
         board = [a for a in board if a["online"]]
 
-    # Flagged agents are demoted out of the main board at scale, so surface them
-    # in a dedicated array — the portal renders these as red "FRAUD WARNING"
-    # cards regardless of their rank.
-    flagged_rows = turso.execute(
-        "SELECT * FROM agents WHERE is_fraudulent = 1 ORDER BY fraud_strikes DESC LIMIT 100"
-    )
-    flagged = [_row_to_public(r) for r in flagged_rows]
+    flagged: list[dict] = []
+    if include_flagged:
+        flagged_rows = turso.execute(
+            "SELECT * FROM agents WHERE is_fraudulent = 1 ORDER BY fraud_strikes DESC LIMIT 100"
+        )
+        flagged = [_row_to_public(r) for r in flagged_rows]
 
-    # Split-metrics promoted to top level per the analytics contract; `summary`
-    # retained for the richer by_source breakdown.
     return {
         "ok": True,
         "total_count": total_count,
         "limit": limit,
         "offset": offset,
         "returned": len(board),
-        "organic_sdk_registrations": by_source.get("sdk", 0),
-        "scraped_registrations": by_source.get("scraper", 0),
+        "organic_sdk_registrations": organic_sdk,
+        "scraped_registrations": scraped,
         "flagged_count": len(flagged),
         "summary": summary,
         "leaderboard": board,

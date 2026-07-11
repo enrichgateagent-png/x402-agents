@@ -36,7 +36,7 @@ echo ">>> [3/7] Write registry .env"
 cat > "$REGISTRY_DIR/.env" <<EOF
 SQLITE_DB_PATH=$DB_PATH
 PORT=8000
-PUBLIC_BASE_URL=http://$GCP_VM_IP:8000
+PUBLIC_BASE_URL=https://registry-ruby.vercel.app
 PORTAL_URL=https://portal-five-phi-54.vercel.app
 VALIDATION_TIMEOUT=6
 REGISTRY_ONLINE_WINDOW=300
@@ -65,12 +65,12 @@ module.exports = {
     {
       name: "beacon-registry",
       script: "$VENV_DIR/bin/uvicorn",
-      args: "main:app --host 0.0.0.0 --port 8000 --workers 2",
+      args: "main:app --host 0.0.0.0 --port 8000 --workers 1",
       cwd: "$REGISTRY_DIR",
       env: {
         SQLITE_DB_PATH: "$DB_PATH",
         PORT: "8000",
-        PUBLIC_BASE_URL: "http://$GCP_VM_IP:8000",
+        PUBLIC_BASE_URL: "https://registry-ruby.vercel.app",
       },
     },
     {

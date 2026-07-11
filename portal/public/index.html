@@ -246,7 +246,7 @@
         <div id="integrate" class="mt-4 rounded-2xl border border-void-line bg-void-card p-4">
           <p class="text-xs font-medium text-white">Connect via MCP</p>
           <p class="mt-1 text-[11px] text-slate-500">Run the Beacon MCP server locally in your editor:</p>
-          <code class="mt-3 block rounded-lg bg-void/80 p-3 font-mono text-[10px] leading-relaxed text-pulse-cyan break-all">BEACON_REGISTRY_URL=http://34.45.7.252:8000 npx -y beacon-mcp</code>
+          <code class="mt-3 block rounded-lg bg-void/80 p-3 font-mono text-[10px] leading-relaxed text-pulse-cyan break-all">BEACON_REGISTRY_URL=https://registry-ruby.vercel.app npx -y beacon-mcp</code>
           <button id="copyEditorMcp" class="mt-2 w-full rounded-lg border border-void-line py-2 text-xs text-slate-400 hover:text-white transition">Copy command</button>
         </div>
       </aside>
@@ -254,8 +254,8 @@
   </div>
 
   <footer class="mt-8 border-t border-void-line py-6 text-center text-xs text-slate-600">
-    Beacon registry · <a href="http://34.45.7.252:8000/llms.txt" class="hover:text-slate-400">llms.txt</a> ·
-    <a href="http://34.45.7.252:8000" class="hover:text-slate-400">API</a> ·
+    Beacon registry · <a href="/llms.txt" class="hover:text-slate-400">llms.txt</a> ·
+    <a href="https://registry-ruby.vercel.app" class="hover:text-slate-400">API</a> ·
     <a href="http://34.45.7.252:8001/sse" class="hover:text-slate-400">MCP SSE</a>
   </footer>
 
@@ -320,6 +320,28 @@
         $("statLiveDot").classList.remove("text-emerald-400");
         $("statLiveDot").classList.add("text-pulse-amber");
         $("statLiveDot").title = "Registry unreachable — retrying…";
+      }
+    }
+
+    async function apiGet(path, timeoutMs = 20000) {
+      const res = await fetch(`${API}${path}`, { signal: AbortSignal.timeout(timeoutMs) });
+      if (!res.ok) throw new Error(`HTTP ${res.status}`);
+      return res.json();
+    }
+
+    async function searchAgents(q, limit = PAGE_SIZE) {
+      // Prefer GET /search (FTS, cacheable) — POST /discover as fallback.
+      try {
+        const d = await apiGet(`/api/v1/search?q=${encodeURIComponent(q)}&limit=${limit}`);
+        return { results: d.results || [], count: d.count ?? (d.results || []).length, semantic_expanded: false };
+      } catch {
+        const d = await fetch(`${API}/api/v1/discover`, {
+          method: "POST",
+          headers: { "content-type": "application/json" },
+          body: JSON.stringify({ query: q, limit }),
+          signal: AbortSignal.timeout(20000),
+        }).then((r) => r.json());
+        return { results: d.results || [], count: d.count ?? (d.results || []).length, semantic_expanded: d.semantic_expanded };
       }
     }
 
@@ -582,15 +604,14 @@
       showLoading(true);
       const t0 = performance.now();
       try {
-        const lb = await fetch(`${API}/api/v1/leaderboard?limit=1`).then((r) => r.json());
-        setStats(lb);
         let list = [];
         if (browseMode === "top") {
-          const pg = await fetch(`${API}/api/v1/leaderboard?limit=${PAGE_SIZE}&offset=${page * PAGE_SIZE}`).then((r) => r.json());
+          const pg = await apiGet(`/api/v1/leaderboard?limit=${PAGE_SIZE}&offset=${page * PAGE_SIZE}`);
           list = pg.leaderboard || [];
+          if (pg.total_count) totalCount = pg.total_count;
           renderPager();
         } else {
-          const d = await fetch(`${API}/api/v1/agents?sort=${browseMode}&limit=${PAGE_SIZE}`).then((r) => r.json());
+          const d = await apiGet(`/api/v1/agents?sort=${browseMode}&limit=${PAGE_SIZE}`);
           list = d.agents || [];
           $("pager").classList.add("hidden");
         }
@@ -622,11 +643,7 @@
       showLoading(true);
       const t0 = performance.now();
       try {
-        const d = await fetch(`${API}/api/v1/discover`, {
-          method: "POST",
-          headers: { "content-type": "application/json" },
-          body: JSON.stringify({ query: q, limit: PAGE_SIZE }),
-        }).then((r) => r.json());
+        const d = await searchAgents(q, PAGE_SIZE);
         const list = d.results || [];
         const ms = ((performance.now() - t0) / 1000).toFixed(2);
         renderResults(list, `${d.count ?? list.length} matches for "${q}" · ${ms}s${d.semantic_expanded ? " · semantic" : ""}`);
@@ -645,7 +662,7 @@
         beacon_stack: "1.0",
         created: new Date().toISOString(),
         agents: dock,
-        mcp_install: "BEACON_REGISTRY_URL=http://34.45.7.252:8000 npx -y beacon-mcp",
+        mcp_install: "BEACON_REGISTRY_URL=https://registry-ruby.vercel.app npx -y beacon-mcp",
       };
       navigator.clipboard?.writeText(JSON.stringify(manifest, null, 2));
       toast("Stack manifest copied");
@@ -732,7 +749,7 @@
     $("btnExportStack").addEventListener("click", exportStack);
     $("btnClearDock").addEventListener("click", () => { dock = []; saveDock(); hideInspector(); toast("Dock cleared"); });
     $("copyEditorMcp").addEventListener("click", () => {
-      navigator.clipboard?.writeText("BEACON_REGISTRY_URL=http://34.45.7.252:8000 npx -y beacon-mcp");
+      navigator.clipboard?.writeText("BEACON_REGISTRY_URL=https://registry-ruby.vercel.app npx -y beacon-mcp");
       toast("Command copied");
     });
 

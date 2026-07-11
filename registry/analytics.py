@@ -98,6 +98,9 @@ def log_request(request, client_class: str) -> None:
         return
     if path.startswith("/api/admin"):
         return
+    # Registration storms from scrapers/SDK — skip per-hit logging.
+    if path.startswith("/api/v1/register"):
+        return
 
     ua = (request.headers.get("user-agent") or "unknown")[:512]
     bucket = _traffic_bucket(ua)
