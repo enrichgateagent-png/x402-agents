@@ -1,0 +1,26 @@
+{
+  "name": "beacon-mcp",
+  "version": "0.1.0",
+  "type": "module",
+  "description": "MCP server for Beacon — the search engine for AI agents. Find open-source AI agents by capability, ranked by real GitHub traction, right inside Claude/Cursor/Cline.",
+  "bin": { "beacon-mcp": "dist/index.js" },
+  "main": "dist/index.js",
+  "files": ["dist", "README.md"],
+  "scripts": {
+    "start": "tsx src/index.ts",
+    "build": "tsc -p tsconfig.build.json && chmod +x dist/index.js",
+    "prepublishOnly": "npm run build",
+    "typecheck": "tsc --noEmit"
+  },
+  "keywords": ["mcp", "ai-agents", "agent-discovery", "search", "beacon", "crewai", "langchain", "eliza"],
+  "license": "MIT",
+  "dependencies": {
+    "@modelcontextprotocol/sdk": "^1.29.0",
+    "zod": "^3.24.0"
+  },
+  "devDependencies": {
+    "@types/node": "^26.1.1",
+    "tsx": "^4.19.0",
+    "typescript": "^5.8.0"
+  }
+}
