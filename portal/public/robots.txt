@@ -1,0 +1,4 @@
+User-agent: *
+Allow: /
+
+Sitemap: https://portal-five-phi-54.vercel.app/sitemap.xml

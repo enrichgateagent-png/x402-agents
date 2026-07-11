@@ -6,12 +6,16 @@
       "destination": "http://34.45.7.252:8000/discover/:path*"
     },
     {
-      "source": "/sitemap.xml",
-      "destination": "http://34.45.7.252:8000/sitemap.xml"
+      "source": "/llms.txt",
+      "destination": "http://34.45.7.252:8000/llms.txt"
     },
     {
-      "source": "/robots.txt",
-      "destination": "http://34.45.7.252:8000/robots.txt"
+      "source": "/.well-known/ai-plugin.json",
+      "destination": "http://34.45.7.252:8000/.well-known/ai-plugin.json"
+    },
+    {
+      "source": "/beacon.cursorrules",
+      "destination": "http://34.45.7.252:8000/beacon.cursorrules"
     },
     {
       "source": "/api/admin/:path*",
