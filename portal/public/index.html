@@ -305,15 +305,27 @@
     }
 
     async function refreshRegistryCount() {
+      // Fast path first — /healthz is a single COUNT(*), usually <100ms.
       try {
-        const h = await fetch(`${API}/api/v1/health`).then((r) => r.json());
+        const hz = await fetch(`${API}/healthz`, { signal: AbortSignal.timeout(15000) }).then((r) => r.json());
+        if (hz.ok) {
+          animateCount($("liveCount"), hz.agents);
+          animateCount($("statTotal"), hz.agents);
+        }
+      } catch {}
+      try {
+        const h = await fetch(`${API}/api/v1/health`, { signal: AbortSignal.timeout(30000) }).then((r) => r.json());
         if (h.ok) {
           setStats({
             total_count: h.total_agents,
             active_agents_90d: h.active_agents_90d,
           });
         }
-      } catch {}
+      } catch {
+        $("statLiveDot").classList.remove("text-emerald-400");
+        $("statLiveDot").classList.add("text-pulse-amber");
+        $("statLiveDot").title = "Registry slow or unreachable — retrying…";
+      }
     }
 
     function trendingBadge(type) {

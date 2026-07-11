@@ -11,31 +11,31 @@
     },
     {
       "source": "/discover/:path*",
-      "destination": "http://34.45.7.252:8000/discover/:path*"
+      "destination": "https://registry-ruby.vercel.app/discover/:path*"
     },
     {
       "source": "/llms.txt",
-      "destination": "http://34.45.7.252:8000/llms.txt"
+      "destination": "https://registry-ruby.vercel.app/llms.txt"
     },
     {
       "source": "/.well-known/ai-plugin.json",
-      "destination": "http://34.45.7.252:8000/.well-known/ai-plugin.json"
+      "destination": "https://registry-ruby.vercel.app/.well-known/ai-plugin.json"
     },
     {
       "source": "/beacon.cursorrules",
-      "destination": "http://34.45.7.252:8000/beacon.cursorrules"
+      "destination": "https://registry-ruby.vercel.app/beacon.cursorrules"
     },
     {
       "source": "/api/admin/:path*",
-      "destination": "http://34.45.7.252:8000/api/admin/:path*"
+      "destination": "https://registry-ruby.vercel.app/api/admin/:path*"
     },
     {
       "source": "/api/v1/:path*",
-      "destination": "http://34.45.7.252:8000/api/v1/:path*"
+      "destination": "https://registry-ruby.vercel.app/api/v1/:path*"
     },
     {
       "source": "/healthz",
-      "destination": "http://34.45.7.252:8000/healthz"
+      "destination": "https://registry-ruby.vercel.app/healthz"
     }
   ]
 }

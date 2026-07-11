@@ -96,7 +96,17 @@ def _active_agents_count() -> int:
     now = time.time()
     if now - _active_cache["at"] < _ACTIVE_CACHE_TTL:
         return int(_active_cache["count"])
-    n = analytics.count_active_agents(_pushed_recently)
+    # Fast SQL — avoid scanning 19k+ rows in Python on every /health poll.
+    rows = turso.execute(
+        """
+        SELECT COUNT(*) AS c FROM agents
+         WHERE is_fraudulent = 0
+           AND pushed_at IS NOT NULL
+           AND substr(pushed_at, 1, 10) >= date('now', ?)
+        """,
+        [f"-{ACTIVE_WINDOW_DAYS} days"],
+    )
+    n = int(rows[0]["c"]) if rows else 0
     _active_cache["count"] = n
     _active_cache["at"] = now
     return n
