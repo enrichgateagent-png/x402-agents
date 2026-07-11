@@ -77,6 +77,19 @@ SEARCH_QUERIES: list[str] = [
     "trading-bot agent",
     "topic:ai-assistant",
     "topic:llm-agent",
+    # --- canonical ecosystem tags (deep sweep) ---
+    "topic:open-mcp",
+    "topic:autogen-agent",
+    "semantic-kernel",
+    "topic:crewai-tool",
+    "topic:langgraph-agent",
+    "topic:agentops",
+    "topic:ai-agent-template",
+    "topic:llm-workflow",
+    "custom-gpt-agent",
+    "topic:voice-agent",
+    "autonomous-bot",
+    "topic:semantic-kernel",
 ]
 
 STOPWORDS = {

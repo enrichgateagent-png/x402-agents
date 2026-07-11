@@ -17,14 +17,17 @@ import re
 from datetime import datetime, timezone
 from typing import Optional
 
+import html
+
 import requests
 from fastapi import BackgroundTasks, FastAPI, HTTPException, Request
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import JSONResponse
+from fastapi.responses import JSONResponse, Response
 from pydantic import AliasChoices, BaseModel, Field, field_validator
 
 import turso
 
+PUBLIC_BASE_URL = os.environ.get("PUBLIC_BASE_URL", "https://registry-ruby.vercel.app").rstrip("/")
 VALIDATION_TIMEOUT = float(os.environ.get("VALIDATION_TIMEOUT", "6"))
 # Endpoint schemes that are process-local (not HTTP) and can't be pinged.
 _NON_HTTP_PREFIXES = ("framework://", "eliza://", "local://", "mcp://")
@@ -296,7 +299,19 @@ def register(req: RegisterRequest, background_tasks: BackgroundTasks) -> dict:
     row = turso.execute("SELECT * FROM agents WHERE agent_id = ?", [req.agent_id])[0]
     # Fire the endpoint validation after the response is sent.
     background_tasks.add_task(validate_agent_endpoint, req.agent_id, req.mcp_endpoint)
-    return {"ok": True, "status": status, "agent": _row_to_public(row)}
+
+    # Copy-paste-ready badge for the developer's README (drives the growth loop).
+    from urllib.parse import quote
+    badge_url = f"{PUBLIC_BASE_URL}/api/v1/agents/{quote(req.agent_id)}/badge.svg"
+    badge_markdown = f"![Beacon Verified]({badge_url})"
+
+    return {
+        "ok": True,
+        "status": status,
+        "agent": _row_to_public(row),
+        "badge_url": badge_url,
+        "badge_markdown": badge_markdown,
+    }
 
 
 # Lightweight semantic map: each concept -> related capability tokens. Used only
@@ -467,6 +482,87 @@ def telemetry(req: TelemetryRequest) -> dict:
     )
     row = turso.execute("SELECT * FROM agents WHERE agent_id = ?", [req.agent_id])[0]
     return {"ok": True, "recorded": req.status, "agent": _row_to_public(row)}
+
+
+def _badge_char_width(s: str) -> int:
+    """Approximate rendered width (px) of a string at font-size 11, Verdana-ish."""
+    narrow = set("ijl.,:'|! ")
+    wide = set("mwMW@")
+    w = 0.0
+    for ch in s:
+        if ch in narrow:
+            w += 3.5
+        elif ch in wide:
+            w += 9.5
+        else:
+            w += 6.6
+    return int(w)
+
+
+def _render_badge(label: str, message: str, color: str) -> str:
+    """Flat 'shields'-style two-segment SVG badge, self-contained."""
+    pad = 10
+    lw = _badge_char_width(label) + pad * 2
+    mw = _badge_char_width(message) + pad * 2
+    total = lw + mw
+    label_e = html.escape(label)
+    message_e = html.escape(message)
+    # x positions are in the 10x-scaled text space shields uses for crisp text.
+    lx = lw * 5
+    mx = (lw + mw / 2) * 10
+    ltl = (_badge_char_width(label)) * 10
+    mtl = (_badge_char_width(message)) * 10
+    return f"""<svg xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink" width="{total}" height="20" role="img" aria-label="{label_e}: {message_e}">
+  <title>{label_e}: {message_e}</title>
+  <linearGradient id="s" x2="0" y2="100%">
+    <stop offset="0" stop-color="#bbb" stop-opacity=".1"/>
+    <stop offset="1" stop-opacity=".1"/>
+  </linearGradient>
+  <clipPath id="r"><rect width="{total}" height="20" rx="3" fill="#fff"/></clipPath>
+  <g clip-path="url(#r)">
+    <rect width="{lw}" height="20" fill="#414141"/>
+    <rect x="{lw}" width="{mw}" height="20" fill="{color}"/>
+    <rect width="{total}" height="20" fill="url(#s)"/>
+  </g>
+  <g fill="#fff" text-anchor="middle" font-family="Verdana,Geneva,DejaVu Sans,sans-serif" font-size="110" text-rendering="geometricPrecision">
+    <text aria-hidden="true" x="{lx}" y="150" fill="#010101" fill-opacity=".3" transform="scale(.1)" textLength="{ltl}">{label_e}</text>
+    <text x="{lx}" y="140" transform="scale(.1)" textLength="{ltl}">{label_e}</text>
+    <text aria-hidden="true" x="{mx}" y="150" fill="#010101" fill-opacity=".3" transform="scale(.1)" textLength="{mtl}">{message_e}</text>
+    <text x="{mx}" y="140" transform="scale(.1)" textLength="{mtl}">{message_e}</text>
+  </g>
+</svg>"""
+
+
+@app.get("/api/v1/agents/{agent_id:path}/badge.svg")
+def agent_badge(agent_id: str) -> Response:
+    """
+    Live SVG reputation badge for a developer's README. Regenerated per request so
+    it reflects current telemetry. States: unknown (gray), flagged (crimson),
+    verified (emerald with success %).
+    """
+    _ensure_ready()
+    rows = turso.execute(
+        "SELECT success_rate, is_fraudulent FROM agents WHERE agent_id = ?", [agent_id]
+    )
+    if not rows:
+        label, message, color = "Beacon", "Unknown", "#9f9f9f"
+    elif int(rows[0].get("is_fraudulent", 0) or 0):
+        label, message, color = "Beacon", "Flagged Risk", "#c0341d"
+    else:
+        pct = round(float(rows[0]["success_rate"]) * 100)
+        label, message, color = "Beacon Verified", f"{pct}% Success", "#2ea043"
+
+    svg = _render_badge(label, message, color)
+    return Response(
+        content=svg,
+        media_type="image/svg+xml",
+        headers={
+            # Always-fresh so the badge tracks telemetry in real time.
+            "Cache-Control": "no-cache, no-store, must-revalidate, max-age=0",
+            "Pragma": "no-cache",
+            "Expires": "0",
+        },
+    )
 
 
 @app.get("/api/v1/radar")
