@@ -31,6 +31,7 @@ import os
 import re
 import sys
 import time
+from datetime import datetime, timedelta, timezone
 from typing import Iterable
 
 import requests
@@ -48,6 +49,15 @@ THROTTLE_SECS = float(os.environ.get("THROTTLE_SECS", "2"))
 GITHUB_SEARCH_URL = "https://api.github.com/search/repositories"
 PER_PAGE = 100
 REQUEST_TIMEOUT = 30
+
+# Favor actively-maintained agents: only index repos pushed within this window.
+# Dead/abandoned repos are skipped at crawl time (existing ones stay, re-marked
+# inactive by enrich_github.py). Set PUSHED_SINCE_DAYS=0 to index regardless.
+PUSHED_SINCE_DAYS = int(os.environ.get("PUSHED_SINCE_DAYS", "365"))
+_PUSHED_QUALIFIER = ""
+if PUSHED_SINCE_DAYS > 0:
+    _since = (datetime.now(timezone.utc) - timedelta(days=PUSHED_SINCE_DAYS)).strftime("%Y-%m-%d")
+    _PUSHED_QUALIFIER = f" pushed:>{_since}"
 
 # Exact agent-ecosystem targets requested. `topic:` queries hit curated tags;
 # bare keyword queries catch repos that describe themselves but forgot the topic.
@@ -323,8 +333,8 @@ def search_repositories(session: requests.Session, query: str) -> Iterable[dict]
     page = 1
     while harvested < MAX_PER_QUERY and page <= MAX_PAGES:
         params = {
-            "q": query,
-            "sort": "stars",
+            "q": query + _PUSHED_QUALIFIER,
+            "sort": "updated",  # freshest first — active agents lead the harvest
             "order": "desc",
             "per_page": PER_PAGE,
             "page": page,
