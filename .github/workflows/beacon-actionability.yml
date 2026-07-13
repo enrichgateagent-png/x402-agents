@@ -1,0 +1,43 @@
+name: Beacon Actionability Scan
+
+# Enrich indexed repos with HOW to invoke them (npx / pip). Each run processes
+# the next batch of un-scanned repos, highest-star first, so coverage builds
+# toward full over time. Small batches (GitHub rate-limits raw requests).
+on:
+  schedule:
+    - cron: "42 */4 * * *"   # every 4h
+  workflow_dispatch:
+    inputs:
+      owner:
+        description: "Scan a single org on demand"
+        required: false
+        default: ""
+
+concurrency:
+  group: beacon-actionability
+  cancel-in-progress: false
+
+jobs:
+  scan:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Detect invocation methods
+        env:
+          BASE: https://registry-ruby.vercel.app
+          TOKEN: ${{ secrets.BEACON_ADMIN_TOKEN }}
+          OWNER: ${{ github.event.inputs.owner }}
+        run: |
+          set -euo pipefail
+          scan() { curl -fsS -m 100 -X POST "${BASE}/api/admin/actionability-scan?$1" -H "x-admin-token: ${TOKEN}"; }
+          if [ -n "${OWNER}" ]; then
+            echo "On-demand: ${OWNER}"; scan "owner=${OWNER}&limit=200"; exit 0
+          fi
+          # 5 batches of 50 unscanned repos (highest-star first) per run.
+          TOTAL=0
+          for i in $(seq 1 5); do
+            RESP=$(scan "limit=50") || break
+            UP=$(echo "$RESP" | grep -o '"runnable":[0-9]*' | head -1 | grep -o '[0-9]*')
+            echo "batch $i: $RESP" | head -c 200; echo
+            TOTAL=$(( TOTAL + ${UP:-0} ))
+          done
+          echo "Runnable tools found this run: ${TOTAL}"
