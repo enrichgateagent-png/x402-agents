@@ -1036,7 +1036,7 @@ def register(req: RegisterRequest, background_tasks: BackgroundTasks) -> dict:
             success_rate, total_transactions, successful_transactions,
             created_at, last_seen, registration_source,
             stars, open_issues, pushed_at
-        ) VALUES (?, ?, ?, ?, 1.0, 0, 0, ?, ?, ?, ?, ?, ?)
+        ) VALUES (?, ?, ?, ?, 1.0, 0, 0, ?, ?, ?, COALESCE(?, 0), COALESCE(?, 0), ?)
         ON CONFLICT(agent_id) DO UPDATE SET
             name = excluded.name,
             mcp_endpoint = excluded.mcp_endpoint,
