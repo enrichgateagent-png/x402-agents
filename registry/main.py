@@ -884,6 +884,17 @@ def seo_robots() -> Response:
     )
 
 
+# IndexNow ownership proof — lets us instantly push the /discover pages to Bing
+# (which powers ChatGPT Search, Copilot, DuckDuckGo). The key file must be served
+# verbatim at /{key}.txt for the submission host to be trusted.
+_INDEXNOW_KEY = "f2471131bfef1dcf3b4f3c3940fae849"
+
+
+@app.get(f"/{_INDEXNOW_KEY}.txt", include_in_schema=False)
+def indexnow_key() -> Response:
+    return Response(content=_INDEXNOW_KEY, media_type="text/plain")
+
+
 @app.get("/api/v1/search")
 def search_agents(
     q: str,
