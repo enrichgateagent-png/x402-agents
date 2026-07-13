@@ -1149,7 +1149,7 @@ def _fetch_manifest(url: str) -> Optional[dict]:
     """GET a manifest URL (cheap, no GitHub API). Returns parsed JSON or None."""
     try:
         import urllib.request
-        with urllib.request.urlopen(url, timeout=8) as resp:  # noqa: S310 (reference impl)
+        with urllib.request.urlopen(url, timeout=4) as resp:  # noqa: S310 (reference impl)
             raw = resp.read(256 * 1024)  # 256KB cap
         return json.loads(raw.decode("utf-8"))
     except Exception:
@@ -1241,22 +1241,35 @@ def manifest_scan(request: Request, background_tasks: BackgroundTasks,
         "ORDER BY agent_id LIMIT ? OFFSET ?",
         args,
     )
-    checked = upgraded = 0
-    found: list[str] = []
-    for r in rows:
-        checked += 1
-        for url in _raw_manifest_urls(r["mcp_endpoint"]):
+
+    # Fetch every candidate's beacon.json concurrently (cheap GETs, mostly 404) —
+    # sequential would blow the request timeout at batch sizes that matter.
+    from concurrent.futures import ThreadPoolExecutor
+
+    def _probe(row: dict):
+        for url in _raw_manifest_urls(row["mcp_endpoint"]):
             manifest = _fetch_manifest(url)
-            if manifest is None:
-                continue
-            try:
-                _ingest_manifest(manifest, url, background_tasks)
-                upgraded += 1
-                found.append(r["agent_id"])
-            except HTTPException:
-                pass  # present but invalid — skip, don't fail the sweep
-            break  # stop at first branch that returned a file
-    return {"ok": True, "checked": checked, "upgraded": upgraded,
+            if manifest is not None:
+                return (row["agent_id"], url, manifest)
+        return None
+
+    hits = []
+    with ThreadPoolExecutor(max_workers=24) as pool:
+        for res in pool.map(_probe, rows):
+            if res is not None:
+                hits.append(res)
+
+    # Ingest the hits sequentially (DB writes).
+    upgraded = 0
+    found: list[str] = []
+    for agent_id, url, manifest in hits:
+        try:
+            _ingest_manifest(manifest, url, background_tasks)
+            upgraded += 1
+            found.append(agent_id)
+        except HTTPException:
+            pass  # present but invalid — skip, don't fail the sweep
+    return {"ok": True, "checked": len(rows), "upgraded": upgraded,
             "found": found, "next_offset": offset + limit}
 
 
