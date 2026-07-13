@@ -60,13 +60,17 @@ jobs:
             rmdir ~/x402-agents/registry/registry 2>/dev/null || true
             echo "Deployed main.py: $(ls -l ~/x402-agents/registry/main.py)"
             pm2 restart beacon-registry
-            sleep 4
-            curl -fsS http://127.0.0.1:8000/healthz | head -c 300
+            # Wait (up to ~40s) for the app to rebind port 8000 after restart.
+            BODY=""
+            for i in $(seq 1 20); do
+              sleep 2
+              BODY=$(curl -fsS "http://127.0.0.1:8000/api/v1/search?q=agent&limit=1" 2>/dev/null) && break
+            done
+            echo "healthz: $(curl -fsS http://127.0.0.1:8000/healthz | head -c 200)"
             echo ""
             # Hard gate: prove the NEW code is actually serving. The search
             # endpoint now returns an "include_inactive" field; if it's missing,
             # pm2 is still running stale code — fail the deploy loudly.
-            BODY=$(curl -fsS "http://127.0.0.1:8000/api/v1/search?q=agent&limit=1")
             echo "$BODY" | grep -q '"include_inactive"' \
               && echo "✓ new search code is live" \
-              || { echo "✗ DEPLOY NO-OP: stale code still running"; echo "$BODY" | head -c 300; exit 1; }
+              || { echo "✗ DEPLOY FAILED: app not serving new code"; echo "$BODY" | head -c 300; pm2 logs beacon-registry --lines 30 --nostream; exit 1; }
