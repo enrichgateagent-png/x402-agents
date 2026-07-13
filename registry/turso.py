@@ -160,6 +160,11 @@ def ensure_schema() -> None:
         "ALTER TABLE agents ADD COLUMN stars INTEGER NOT NULL DEFAULT 0",
         "ALTER TABLE agents ADD COLUMN pushed_at TEXT",
         "ALTER TABLE agents ADD COLUMN open_issues INTEGER NOT NULL DEFAULT 0",
+        # Actionability layer — HOW to actually invoke this agent (the real value
+        # vs. a plain repo link). Populated by the actionability scan.
+        "ALTER TABLE agents ADD COLUMN runnable INTEGER NOT NULL DEFAULT 0",
+        "ALTER TABLE agents ADD COLUMN install_cmd TEXT",
+        "ALTER TABLE agents ADD COLUMN run_kind TEXT",
     ):
         try:
             execute(ddl)
@@ -167,6 +172,7 @@ def ensure_schema() -> None:
             pass  # column already exists — safe to ignore
 
     execute("CREATE INDEX IF NOT EXISTS idx_agents_name ON agents(name)")
+    execute("CREATE INDEX IF NOT EXISTS idx_agents_runnable ON agents(runnable DESC, stars DESC)")
     execute("CREATE INDEX IF NOT EXISTS idx_agents_stars ON agents(stars DESC)")
     execute("CREATE INDEX IF NOT EXISTS idx_agents_created ON agents(created_at DESC)")
     execute(

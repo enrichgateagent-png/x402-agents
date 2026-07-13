@@ -211,6 +211,14 @@ def _row_to_public(row: dict) -> dict:
         "health_score": _health_score(
             int(row.get("stars", 0) or 0), row.get("pushed_at"), int(row.get("open_issues", 0) or 0)
         ),
+        # Actionability — the real value: can an agent invoke this in one step?
+        "runnable": bool(int(row.get("runnable", 0) or 0)),
+        "install_cmd": row.get("install_cmd"),   # e.g. "npx -y foo-mcp" / "pip install bar"
+        "run_kind": row.get("run_kind"),          # mcp | npm | python | None
+        "how_to_use": (
+            {"kind": row.get("run_kind"), "command": row.get("install_cmd")}
+            if int(row.get("runnable", 0) or 0) else None
+        ),
         "fraud_status": {
             "is_flagged": bool(int(row.get("is_fraudulent", 0) or 0)),
             "strikes": int(row.get("fraud_strikes", 0) or 0),
@@ -328,13 +336,16 @@ def _freshness_tier_sql(col: str = "pushed_at") -> str:
 #   new      — most recently pushed first: "what shipped this week"
 #   usage    — most telemetry jobs reported (real production use)
 #   proven   — composite: telemetry jobs + weighted portal/MCP selections
-_SORT_MODES = {"relevance", "top", "healthy", "new", "usage", "proven"}
+_SORT_MODES = {"relevance", "top", "healthy", "new", "usage", "proven", "actionable"}
 
 
 def _order_by_sql(sort: str, alias: str, has_rank: bool) -> str:
     """Build the ORDER BY body for a given sort mode. `alias` is '' or 'a.'."""
     a = alias
     tier = _freshness_tier_sql(f"{a}pushed_at")
+    if sort == "actionable":
+        # Ready-to-run tools first: callable > repo-only, then health.
+        return f"{a}runnable DESC, {tier} DESC, {a}stars DESC, {a}success_rate DESC"
     if sort == "top":
         return f"{a}stars DESC, {tier} DESC, {a}success_rate DESC"
     if sort == "new":
@@ -350,9 +361,9 @@ def _order_by_sql(sort: str, alias: str, has_rank: bool) -> str:
             f"({a}total_transactions + COALESCE({u}selections, 0) * {usage.SELECTION_WEIGHT}) DESC, "
             f"{a}success_rate DESC, {a}stars DESC"
         )
-    # relevance: freshness tier, then proven usage, then keyword rank, then popularity
+    # relevance: callable tools first, then freshness, proven usage, keyword rank, popularity
     rank_part = "rank, " if has_rank else ""
-    return f"{tier} DESC, {a}total_transactions DESC, {rank_part}{a}stars DESC, {a}success_rate DESC"
+    return f"{a}runnable DESC, {tier} DESC, {a}total_transactions DESC, {rank_part}{a}stars DESC, {a}success_rate DESC"
 
 
 def _search_agents_core(
@@ -363,6 +374,7 @@ def _search_agents_core(
     include_inactive: bool = False,
     sort: str = "relevance",
     min_stars: int = 0,
+    runnable_only: bool = False,
 ) -> list[dict]:
     """Internal search — used by /api/v1/search and SEO /discover pages.
 
@@ -399,6 +411,7 @@ def _search_agents_core(
             if min_stars > 0:
                 floor_clause = " AND a.stars >= ?"
                 args.append(min_stars)
+            run_clause = " AND a.runnable = 1" if runnable_only else ""
             args.extend([limit, offset])
 
             rows = turso.execute(
@@ -411,6 +424,7 @@ def _search_agents_core(
                    {cat_clause}
                    {live_clause}
                    {floor_clause}
+                   {run_clause}
                  ORDER BY {_order_by_sql(sort, 'a.', has_rank=True)}
                  LIMIT ? OFFSET ?
                 """,
@@ -434,6 +448,7 @@ def _search_agents_core(
         if min_stars > 0:
             floor_clause = " AND stars >= ?"
             args.append(min_stars)
+        run_clause = " AND runnable = 1" if runnable_only else ""
         args.extend([limit, offset])
 
         rows = turso.execute(
@@ -449,6 +464,7 @@ def _search_agents_core(
                {cat_clause}
                {live_clause}
                {floor_clause}
+               {run_clause}
              ORDER BY {_order_by_sql(sort, '', has_rank=False)}
              LIMIT ? OFFSET ?
             """,
@@ -1000,6 +1016,7 @@ def search_agents(
     include_inactive: bool = False,
     sort: str = "relevance",
     min_stars: int = 0,
+    runnable_only: bool = False,
 ) -> dict:
     """
     Full-text search across name, mcp_endpoint (github URL), and capability tags.
@@ -1028,6 +1045,7 @@ def search_agents(
     results = _search_agents_core(
         q, limit=limit, offset=offset, category=category,
         include_inactive=include_inactive, sort=sort, min_stars=min_stars,
+        runnable_only=runnable_only,
     )
     total = len(results)
 
@@ -1404,6 +1422,118 @@ def manifest_scan(request: Request, background_tasks: BackgroundTasks,
             pass  # present but invalid — skip, don't fail the sweep
     return {"ok": True, "checked": len(rows), "upgraded": upgraded,
             "found": found, "next_offset": offset + limit}
+
+
+# --------------------------------------------------------------------------- #
+# Actionability layer — turn "here's a repo" into "here's how to invoke it".
+# The real value vs. a plain GitHub search: an agent needs a callable tool, not
+# source code. We derive the invocation (npx / pip) from the repo's manifest.
+# --------------------------------------------------------------------------- #
+
+def _fetch_raw(url: str) -> Optional[str]:
+    """GET a raw file (cheap, no GitHub API). Returns text or None."""
+    try:
+        import urllib.request
+        with urllib.request.urlopen(url, timeout=4) as resp:  # noqa: S310
+            return resp.read(128 * 1024).decode("utf-8", "replace")
+    except Exception:
+        return None
+
+
+def _repo_slug(mcp_endpoint: str) -> Optional[tuple[str, str]]:
+    import re as _re
+    m = _re.search(r"github\.com/([^/]+)/([^/#?]+)", mcp_endpoint or "")
+    if not m:
+        return None
+    return m.group(1), m.group(2).removesuffix(".git")
+
+
+def _detect_actionability(mcp_endpoint: str) -> Optional[dict]:
+    """Return {runnable, install_cmd, run_kind} for a repo, or None if not
+    clearly invokable. Prioritizes MCP servers and npx CLIs (what agents want)."""
+    slug = _repo_slug(mcp_endpoint)
+    if not slug:
+        return None
+    owner, repo = slug
+    raw = f"https://raw.githubusercontent.com/{owner}/{repo}"
+    for branch in ("main", "master"):
+        txt = _fetch_raw(f"{raw}/{branch}/package.json")
+        if txt:
+            try:
+                pkg = json.loads(txt)
+            except Exception:
+                continue
+            name = (pkg.get("name") or "").strip()
+            if not name:
+                break
+            deps = {**(pkg.get("dependencies") or {}), **(pkg.get("devDependencies") or {})}
+            blob = (name + " " + " ".join(pkg.get("keywords") or []) + " " + " ".join(deps)).lower()
+            is_mcp = "modelcontextprotocol" in blob or "mcp" in (pkg.get("keywords") or []) or "-mcp" in name or "mcp-" in name
+            has_bin = bool(pkg.get("bin"))
+            if has_bin or is_mcp:
+                return {"runnable": 1, "install_cmd": f"npx -y {name}",
+                        "run_kind": "mcp" if is_mcp else "npm"}
+            break  # package.json found but not a runnable CLI
+    # Python fallback: pyproject with console scripts
+    for branch in ("main", "master"):
+        txt = _fetch_raw(f"{raw}/{branch}/pyproject.toml")
+        if txt and "[project.scripts]" in txt:
+            import re as _re
+            m = _re.search(r'(?m)^\s*name\s*=\s*["\']([^"\']+)["\']', txt)
+            if m:
+                return {"runnable": 1, "install_cmd": f"pip install {m.group(1)}", "run_kind": "python"}
+            break
+    return None
+
+
+@app.post("/api/admin/actionability-scan")
+def actionability_scan(request: Request, limit: int = 150, offset: int = 0,
+                       owner: Optional[str] = None) -> dict:
+    """Enrich indexed github repos with HOW to invoke them (npx / pip). Rolling
+    offset sweeps the index; ?owner= scans one org. Admin-guarded, cheap raw GETs."""
+    if not analytics.verify_admin(request):
+        raise HTTPException(status_code=401, detail="Unauthorized — set ADMIN_SECRET_PASSWORD on the VM")
+    _ensure_ready()
+    limit = max(1, min(limit, 500))
+    owner = (owner or "").strip().lower() or None
+    where = "mcp_endpoint LIKE '%github.com%' AND run_kind IS NULL"
+    args: list = []
+    if owner:
+        where = "mcp_endpoint LIKE '%github.com%' AND LOWER(agent_id) LIKE ?"
+        args.append(f"{owner}/%")
+    args.extend([limit, offset])
+    rows = turso.execute(
+        f"SELECT agent_id, mcp_endpoint FROM agents WHERE {where} "
+        "ORDER BY stars DESC LIMIT ? OFFSET ?",
+        args,
+    )
+
+    from concurrent.futures import ThreadPoolExecutor
+
+    def _probe(row: dict):
+        info = _detect_actionability(row["mcp_endpoint"])
+        return (row["agent_id"], info)
+
+    runnable = 0
+    found: list[dict] = []
+    results = []
+    with ThreadPoolExecutor(max_workers=24) as pool:
+        results = list(pool.map(_probe, rows))
+    now = _utcnow().isoformat()
+    for agent_id, info in results:
+        if info:
+            turso.execute(
+                "UPDATE agents SET runnable = ?, install_cmd = ?, run_kind = ?, last_validated = ? "
+                "WHERE agent_id = ?",
+                [info["runnable"], info["install_cmd"], info["run_kind"], now, agent_id],
+            )
+            runnable += 1
+            found.append({"agent_id": agent_id, "cmd": info["install_cmd"], "kind": info["run_kind"]})
+        else:
+            # mark as checked (run_kind='' so we don't rescan forever)
+            turso.execute("UPDATE agents SET run_kind = '' WHERE agent_id = ? AND run_kind IS NULL", [agent_id])
+    return {"ok": True, "checked": len(rows), "runnable": runnable,
+            "found": found[:25], "next_offset": offset + limit}
 
 
 # Lightweight semantic map: each concept -> related capability tokens. Used only
