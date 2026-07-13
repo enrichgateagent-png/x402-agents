@@ -1064,6 +1064,7 @@ def search_agents(
         if min_stars > 0:
             floor_clause = " AND stars >= ?"
             count_args.append(min_stars)
+        run_clause = " AND runnable = 1" if runnable_only else ""
         count_row = turso.execute(
             f"""
             SELECT COUNT(*) AS c FROM agents
@@ -1077,6 +1078,7 @@ def search_agents(
                {cat_clause}
                {live_clause}
                {floor_clause}
+               {run_clause}
             """,
             count_args,
         )
