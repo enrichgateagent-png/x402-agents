@@ -1,0 +1,55 @@
+{
+  "_note": "Outreach PR tracker. Updated by beacon-outreach-watch.yml only when PR state changes. No auto-comments on PRs.",
+  "pull_requests": [
+    {
+      "repo": "lgazo/drawio-mcp-server",
+      "pr_number": 62,
+      "owner": "lgazo",
+      "agent_id": "lgazo/drawio-mcp-server",
+      "url": "https://github.com/lgazo/drawio-mcp-server/pull/62",
+      "state": "OPEN",
+      "merged_at": null,
+      "scan_triggered_at": null
+    },
+    {
+      "repo": "utensils/mcp-nixos",
+      "pr_number": 186,
+      "owner": "utensils",
+      "agent_id": "utensils/mcp-nixos",
+      "url": "https://github.com/utensils/mcp-nixos/pull/186",
+      "state": "OPEN",
+      "merged_at": null,
+      "scan_triggered_at": null
+    },
+    {
+      "repo": "xyTom/coding-tools-mcp",
+      "pr_number": 16,
+      "owner": "xyTom",
+      "agent_id": "xyTom/coding-tools-mcp",
+      "url": "https://github.com/xyTom/coding-tools-mcp/pull/16",
+      "state": "OPEN",
+      "merged_at": null,
+      "scan_triggered_at": null
+    },
+    {
+      "repo": "ivnvxd/mcp-server-odoo",
+      "pr_number": 99,
+      "owner": "ivnvxd",
+      "agent_id": "ivnvxd/mcp-server-odoo",
+      "url": "https://github.com/ivnvxd/mcp-server-odoo/pull/99",
+      "state": "OPEN",
+      "merged_at": null,
+      "scan_triggered_at": null
+    },
+    {
+      "repo": "SigNoz/signoz-mcp-server",
+      "pr_number": 234,
+      "owner": "SigNoz",
+      "agent_id": "SigNoz/signoz-mcp-server",
+      "url": "https://github.com/SigNoz/signoz-mcp-server/pull/234",
+      "state": "OPEN",
+      "merged_at": null,
+      "scan_triggered_at": null
+    }
+  ]
+}
