@@ -509,6 +509,12 @@ class RegisterRequest(BaseModel):
     capabilities: str = Field("", max_length=4096)
     # Analytics: distinguish organic SDK/plugin registrations from the scraper.
     source: str = Field("sdk", max_length=32)
+    # Optional enrichment carried at crawl time so scraped repos are immediately
+    # scored/active — no waiting on a separate enrichment pass. None = "not
+    # provided" (organic SDK registers), so existing enriched values are kept.
+    stars: Optional[int] = Field(None, ge=0)
+    open_issues: Optional[int] = Field(None, ge=0)
+    pushed_at: Optional[str] = Field(None, max_length=64)
 
     @field_validator("agent_id", "name", "mcp_endpoint")
     @classmethod
@@ -974,13 +980,19 @@ def register(req: RegisterRequest, background_tasks: BackgroundTasks) -> dict:
         INSERT INTO agents (
             agent_id, name, mcp_endpoint, capabilities_tags,
             success_rate, total_transactions, successful_transactions,
-            created_at, last_seen, registration_source
-        ) VALUES (?, ?, ?, ?, 1.0, 0, 0, ?, ?, ?)
+            created_at, last_seen, registration_source,
+            stars, open_issues, pushed_at
+        ) VALUES (?, ?, ?, ?, 1.0, 0, 0, ?, ?, ?, ?, ?, ?)
         ON CONFLICT(agent_id) DO UPDATE SET
             name = excluded.name,
             mcp_endpoint = excluded.mcp_endpoint,
             capabilities_tags = excluded.capabilities_tags,
             last_seen = excluded.last_seen,
+            -- crawl-time enrichment: adopt fresh values when provided, but never
+            -- let a NULL (organic register w/o metadata) wipe an enriched value.
+            stars = COALESCE(excluded.stars, agents.stars),
+            open_issues = COALESCE(excluded.open_issues, agents.open_issues),
+            pushed_at = COALESCE(excluded.pushed_at, agents.pushed_at),
             -- 'sdk' (organic) is sticky: a later scraper pass must not
             -- overwrite an agent that once registered itself organically.
             registration_source = CASE
@@ -992,7 +1004,10 @@ def register(req: RegisterRequest, background_tasks: BackgroundTasks) -> dict:
                 ELSE excluded.registration_source
             END
         """,
-        [req.agent_id, req.name, req.mcp_endpoint, tags, now, now, source],
+        [
+            req.agent_id, req.name, req.mcp_endpoint, tags, now, now, source,
+            req.stars, req.open_issues, req.pushed_at,
+        ],
     )
     row = turso.execute("SELECT * FROM agents WHERE agent_id = ?", [req.agent_id])[0]
     # Fire the endpoint validation after the response is sent.

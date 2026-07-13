@@ -2,7 +2,12 @@ name: Beacon Indexer
 
 # Harvester runs on the GCP VM only — do NOT schedule on GitHub Actions (was hitting Turso via Vercel).
 on:
-  workflow_dispatch: {}
+  workflow_dispatch:
+    inputs:
+      backfill:
+        description: "1 = re-register existing repos to backfill stars/pushed_at"
+        required: false
+        default: "0"
 
 concurrency:
   group: beacon-indexer
@@ -33,6 +38,7 @@ jobs:
           MAX_PAGES: "10"
           MAX_PER_QUERY: "1000"
           THROTTLE_SECS: "1"
+          BACKFILL: ${{ inputs.backfill || '0' }}
         run: python scraper_agent.py
 
       - name: Refresh reachability matrix

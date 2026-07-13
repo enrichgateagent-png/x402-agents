@@ -40,7 +40,10 @@ import requests
 # Configuration
 # --------------------------------------------------------------------------- #
 
-REGISTRY_URL = os.environ.get("REGISTRY_URL", "http://34.45.7.252:8000").rstrip("/")
+REGISTRY_URL = os.environ.get("REGISTRY_URL", "http://34.67.113.114:8000").rstrip("/")
+# One-off backlog backfill: re-register already-indexed repos so their
+# crawl-time stars/pushed_at land immediately (bypasses the idempotency skip).
+BACKFILL = os.environ.get("BACKFILL", "0") == "1"
 REGISTER_ENDPOINT = f"{REGISTRY_URL}/api/v1/register"
 GITHUB_TOKEN = os.environ.get("GITHUB_TOKEN", "").strip()
 MAX_PER_QUERY = int(os.environ.get("MAX_PER_QUERY", "1000"))
@@ -463,6 +466,12 @@ def register_agent(session: requests.Session, repo: dict) -> bool:
         "capabilities": tags,        # field the server reads
         "capabilities_tags": tags,   # documented alias, ignored if unused
         "source": "scraper",         # analytics: mark harvested vs organic SDK
+        # Enrich at crawl time — these are already in the GitHub search response,
+        # so the repo is scored/active immediately instead of waiting for the
+        # separate enrichment pass to backfill it.
+        "stars": int(repo.get("stargazers_count", 0) or 0),
+        "open_issues": int(repo.get("open_issues_count", 0) or 0),
+        "pushed_at": repo.get("pushed_at"),
     }
 
     try:
@@ -515,7 +524,10 @@ def run_once(*, refresh_cache: bool = False) -> dict:
                     continue
 
                 # Idempotency gate — no register API, no DB read/write beyond memory.
-                if _already_indexed(slug, html_url):
+                # BACKFILL=1 bypasses it for a one-off pass that re-registers found
+                # repos WITH crawl-time stars/pushed_at, scoring the existing
+                # backlog at 100 repos/API-call instead of enrichment's 1/call.
+                if not BACKFILL and _already_indexed(slug, html_url):
                     stats["memory_skipped"] += 1
                     query_skipped += 1
                     if stats["memory_skipped"] <= 3 or stats["memory_skipped"] % 1000 == 0:
