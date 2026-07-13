@@ -1,0 +1,47 @@
+name: Beacon Manifest Scan
+
+# The MUSCLE — a deterministic cron (no LLM). Sweeps the indexed github repos
+# and auto-upgrades any that publish a beacon.json to a verified, self-declared
+# entry. Rolling offset walks the whole ~24k index over the run cycle; the
+# ?owner= on-demand scan (run manually after outreach) handles instant upgrades.
+on:
+  schedule:
+    - cron: "17 */6 * * *"   # every 6h
+  workflow_dispatch:
+    inputs:
+      owner:
+        description: "Scan a single org on demand (e.g. after outreach)"
+        required: false
+        default: ""
+
+concurrency:
+  group: beacon-manifest-scan
+  cancel-in-progress: false
+
+jobs:
+  scan:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Sweep for beacon.json manifests
+        env:
+          BASE: https://registry-ruby.vercel.app
+          TOKEN: ${{ secrets.BEACON_ADMIN_TOKEN }}
+          OWNER: ${{ github.event.inputs.owner }}
+        run: |
+          set -euo pipefail
+          LIMIT=1000
+          if [ -n "${OWNER}" ]; then
+            echo "On-demand scan of org: ${OWNER}"
+            Q="owner=${OWNER}&limit=${LIMIT}"
+          else
+            # Stateless rolling window: 24 slots × 1000 = 24k, sweeps ~weekly at 6h.
+            OFFSET=$(( (${{ github.run_number }} % 24) * LIMIT ))
+            echo "Rolling sweep window: offset=${OFFSET} limit=${LIMIT}"
+            Q="limit=${LIMIT}&offset=${OFFSET}"
+          fi
+          RESP=$(curl -fsS -m 120 -X POST "${BASE}/api/admin/manifest-scan?${Q}" \
+                   -H "x-admin-token: ${TOKEN}")
+          echo "$RESP"
+          echo "$RESP" | grep -q '"ok":true' || { echo "scan failed"; exit 1; }
+          UP=$(echo "$RESP" | grep -o '"upgraded":[0-9]*' | grep -o '[0-9]*')
+          echo "Upgraded ${UP} repo(s) to verified manifest entries."
