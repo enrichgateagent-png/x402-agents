@@ -308,18 +308,44 @@ def _freshness_tier_sql(col: str = "pushed_at") -> str:
     END"""
 
 
+# Ranking modes exposed to the UI's Top / Healthy / New tabs and API callers.
+#   relevance (default) — keyword match, freshness-tiered: best for capability search
+#   top      — proven builders first: stars lead (the homepage "Top" tab)
+#   healthy  — maintenance composite: fresh + starred, demotes the abandoned
+#   new      — most recently pushed first: "what shipped this week"
+_SORT_MODES = {"relevance", "top", "healthy", "new"}
+
+
+def _order_by_sql(sort: str, alias: str, has_rank: bool) -> str:
+    """Build the ORDER BY body for a given sort mode. `alias` is '' or 'a.'."""
+    a = alias
+    tier = _freshness_tier_sql(f"{a}pushed_at")
+    if sort == "top":
+        return f"{a}stars DESC, {tier} DESC, {a}success_rate DESC"
+    if sort == "new":
+        return f"{a}pushed_at DESC, {a}stars DESC"
+    if sort == "healthy":
+        return f"{tier} DESC, {a}stars DESC, {a}success_rate DESC"
+    # relevance: freshness tier, then keyword rank (FTS only), then popularity
+    rank_part = "rank, " if has_rank else ""
+    return f"{tier} DESC, {rank_part}{a}stars DESC, {a}success_rate DESC"
+
+
 def _search_agents_core(
     q: str,
     limit: int = 20,
     offset: int = 0,
     category: Optional[str] = None,
     include_inactive: bool = False,
+    sort: str = "relevance",
+    min_stars: int = 0,
 ) -> list[dict]:
     """Internal search — used by /api/v1/search and SEO /discover pages.
 
     By default, clearly-dead repos (pushed_at older than 2 years) are hidden so
     results stay sharp for agent clients. Pass include_inactive=True to include
-    the full, comprehensive set.
+    the full, comprehensive set. `sort` picks the ranking; `min_stars` sets a
+    quality floor so tag searches aren't drowned by ★0 tutorial repos.
     """
     _ensure_ready()
     q = (q or "").strip()
@@ -329,6 +355,8 @@ def _search_agents_core(
     limit = max(1, min(limit, 100))
     offset = max(0, offset)
     category = (category or "").strip().lower() or None
+    sort = sort if sort in _SORT_MODES else "relevance"
+    min_stars = max(0, min_stars)
 
     fts_q = _fts_query(q)
     results: list[dict] = []
@@ -343,6 +371,10 @@ def _search_agents_core(
                 args.append(f"%,{category},%")
             if not include_inactive:
                 args.append(_DEAD_AFTER)
+            floor_clause = ""
+            if min_stars > 0:
+                floor_clause = " AND a.stars >= ?"
+                args.append(min_stars)
             args.extend([limit, offset])
 
             rows = turso.execute(
@@ -354,8 +386,8 @@ def _search_agents_core(
                    AND a.is_fraudulent = 0
                    {cat_clause}
                    {live_clause}
-                 ORDER BY {_freshness_tier_sql('a.pushed_at')} DESC,
-                          rank, a.stars DESC, a.success_rate DESC
+                   {floor_clause}
+                 ORDER BY {_order_by_sql(sort, 'a.', has_rank=True)}
                  LIMIT ? OFFSET ?
                 """,
                 args,
@@ -374,6 +406,10 @@ def _search_agents_core(
             args.append(f"%,{category},%")
         if not include_inactive:
             args.append(_DEAD_AFTER)
+        floor_clause = ""
+        if min_stars > 0:
+            floor_clause = " AND stars >= ?"
+            args.append(min_stars)
         args.extend([limit, offset])
 
         rows = turso.execute(
@@ -388,8 +424,8 @@ def _search_agents_core(
                )
                {cat_clause}
                {live_clause}
-             ORDER BY {_freshness_tier_sql('pushed_at')} DESC,
-                      stars DESC, success_rate DESC
+               {floor_clause}
+             ORDER BY {_order_by_sql(sort, '', has_rank=False)}
              LIMIT ? OFFSET ?
             """,
             args,
@@ -853,6 +889,8 @@ def search_agents(
     category: Optional[str] = None,
     include_total: bool = False,
     include_inactive: bool = False,
+    sort: str = "relevance",
+    min_stars: int = 0,
 ) -> dict:
     """
     Full-text search across name, mcp_endpoint (github URL), and capability tags.
@@ -862,6 +900,10 @@ def search_agents(
     By default, clearly-dead repos (not pushed in 2+ years) are hidden to keep
     results sharp for agent clients. Pass include_inactive=true for the full,
     comprehensive set (stale repos included, still demoted by health_score).
+
+    sort: relevance (default) | top (stars-led) | healthy (maintenance) | new
+          (freshest). min_stars sets a quality floor so tag searches surface
+          proven builders instead of ★0 tutorial repos.
     """
     _ensure_ready()
     q = (q or "").strip()
@@ -871,9 +913,12 @@ def search_agents(
     limit = max(1, min(limit, 100))
     offset = max(0, offset)
     category = (category or "").strip().lower() or None
+    sort = sort if sort in _SORT_MODES else "relevance"
+    min_stars = max(0, min_stars)
     t0 = time.perf_counter()
     results = _search_agents_core(
-        q, limit=limit, offset=offset, category=category, include_inactive=include_inactive
+        q, limit=limit, offset=offset, category=category,
+        include_inactive=include_inactive, sort=sort, min_stars=min_stars,
     )
     total = len(results)
 
@@ -888,6 +933,10 @@ def search_agents(
         if not include_inactive:
             live_clause = _LIVE_CLAUSE
             count_args.append(_DEAD_AFTER)
+        floor_clause = ""
+        if min_stars > 0:
+            floor_clause = " AND stars >= ?"
+            count_args.append(min_stars)
         count_row = turso.execute(
             f"""
             SELECT COUNT(*) AS c FROM agents
@@ -900,6 +949,7 @@ def search_agents(
                )
                {cat_clause}
                {live_clause}
+               {floor_clause}
             """,
             count_args,
         )
@@ -911,6 +961,8 @@ def search_agents(
         "query": q,
         "category": category,
         "include_inactive": include_inactive,
+        "sort": sort,
+        "min_stars": min_stars,
         "count": len(results),
         "total": total,
         "limit": limit,
@@ -1341,15 +1393,19 @@ def leaderboard(
     offset: int = 0,
     online_only: bool = False,
     include_flagged: bool = False,
+    sort: str = "top",
+    include_inactive: bool = False,
 ) -> dict:
     """
-    Public leaderboard: top agents ranked by reputation (success_rate DESC, then
-    volume). Returns a flat JSON array plus a top-level total_count of every
-    registered agent.
+    Public leaderboard powering the homepage Top / Healthy / New tabs.
+    sort: top (stars-led, default) | healthy (maintenance composite) | new
+          (freshest). Dead repos (not pushed in 2+ years) are hidden unless
+          include_inactive=true. Returns a flat array + total_count.
     """
     _ensure_ready()
     limit = max(1, min(limit, 500))
     offset = max(0, offset)
+    sort = sort if sort in _SORT_MODES else "top"
 
     total_count, organic_sdk, scraped = _source_counts()
     by_source = {"sdk": organic_sdk, "scraper": scraped}
@@ -1360,11 +1416,18 @@ def leaderboard(
         "by_source": by_source,
     }
 
+    board_args: list = []
+    live_clause = ""
+    if not include_inactive:
+        live_clause = _LIVE_CLAUSE
+        board_args.append(_DEAD_AFTER)
+    board_args.extend([limit, offset])
     rows = turso.execute(
-        "SELECT * FROM agents "
-        "ORDER BY is_fraudulent ASC, success_rate DESC, stars DESC, total_transactions DESC "
-        "LIMIT ? OFFSET ?",
-        [limit, offset],
+        f"SELECT * FROM agents "
+        f"WHERE is_fraudulent = 0 {live_clause} "
+        f"ORDER BY {_order_by_sql(sort, '', has_rank=False)} "
+        f"LIMIT ? OFFSET ?",
+        board_args,
     )
     board = [_row_to_public(r) for r in rows]
     if online_only:
@@ -1380,6 +1443,7 @@ def leaderboard(
     return {
         "ok": True,
         "total_count": total_count,
+        "sort": sort,
         "limit": limit,
         "offset": offset,
         "returned": len(board),
