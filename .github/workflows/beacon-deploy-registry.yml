@@ -27,6 +27,9 @@ jobs:
           username: areej
           key: ${{ secrets.GCP_SSH_KEY }}
           source: "registry/main.py,registry/analytics.py"
+          # strip the leading "registry/" so files land at
+          # ~/x402-agents/registry/main.py — NOT nested at registry/registry/…
+          strip_components: 1
           target: "x402-agents/registry/"
 
       - name: Upload start script
@@ -52,6 +55,18 @@ jobs:
               sed -i 's/--workers 2/--workers 1/g' ~/x402-agents/ecosystem.config.cjs
               sed -i 's|PUBLIC_BASE_URL: "http://[^"]*"|PUBLIC_BASE_URL: "https://registry-ruby.vercel.app"|g' ~/x402-agents/ecosystem.config.cjs
             fi
+            # Clean up any file wrongly nested by earlier (pre-strip) deploys.
+            rm -f ~/x402-agents/registry/registry/main.py ~/x402-agents/registry/registry/analytics.py 2>/dev/null || true
+            rmdir ~/x402-agents/registry/registry 2>/dev/null || true
+            echo "Deployed main.py: $(ls -l ~/x402-agents/registry/main.py)"
             pm2 restart beacon-registry
-            sleep 3
+            sleep 4
             curl -fsS http://127.0.0.1:8000/healthz | head -c 300
+            echo ""
+            # Hard gate: prove the NEW code is actually serving. The search
+            # endpoint now returns an "include_inactive" field; if it's missing,
+            # pm2 is still running stale code — fail the deploy loudly.
+            BODY=$(curl -fsS "http://127.0.0.1:8000/api/v1/search?q=agent&limit=1")
+            echo "$BODY" | grep -q '"include_inactive"' \
+              && echo "✓ new search code is live" \
+              || { echo "✗ DEPLOY NO-OP: stale code still running"; echo "$BODY" | head -c 300; exit 1; }
