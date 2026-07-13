@@ -1224,7 +1224,8 @@ def manifest_scan(request: Request, background_tasks: BackgroundTasks,
     """Auto-adopt: walk indexed github repos and upgrade any that publish a
     beacon.json to a verified, self-declared entry. Idempotent; cron a rolling
     offset to sweep the whole index. Admin-guarded (cheap raw GETs, no GH API)."""
-    analytics.verify_admin(request)
+    if not analytics.verify_admin(request):
+        raise HTTPException(status_code=401, detail="Unauthorized — set ADMIN_SECRET_PASSWORD on the VM")
     _ensure_ready()
     limit = max(1, min(limit, 1000))
     rows = turso.execute(
