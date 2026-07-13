@@ -4,7 +4,7 @@ set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 REPO_DIR="$(dirname "$SCRIPT_DIR")"
-GCP_VM_IP="${GCP_VM_IP:-34.45.7.252}"
+GCP_VM_IP="${GCP_VM_IP:-34.67.113.114}"
 GCP_USER="${GCP_USER:-areej}"
 SSH_KEY="${SSH_KEY:-$HOME/.ssh/pumpfun_vps}"
 SSH_OPTS=(-i "$SSH_KEY" -o ConnectTimeout=15 -o StrictHostKeyChecking=accept-new)
