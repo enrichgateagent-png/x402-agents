@@ -1,0 +1,40 @@
+name: Beacon Ops Digest
+
+# The BRAIN — the judgment half of ops. Daily, reads Beacon's own index and
+# drafts personalized outreach for a human to review and send. DRAFT-ONLY: it
+# writes an artifact, it never sends anything. Uses Claude when ANTHROPIC_API_KEY
+# is set; otherwise falls back to templates so the digest is always produced.
+on:
+  schedule:
+    - cron: "0 13 * * 1-5"   # 13:00 UTC on weekdays
+  workflow_dispatch: {}
+
+concurrency:
+  group: beacon-ops-digest
+  cancel-in-progress: false
+
+jobs:
+  digest:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Install (anthropic optional — used only if a key is present)
+        run: pip install anthropic
+      - name: Draft the daily ops digest
+        working-directory: registry
+        env:
+          BEACON_BASE: https://registry-ruby.vercel.app
+          # Optional: set this secret to draft with Claude instead of templates.
+          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          OUT: BEACON_OPS_DIGEST.md
+        run: python beacon_ops.py
+      - name: Publish digest as an artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: beacon-ops-digest
+          path: registry/BEACON_OPS_DIGEST.md
+          retention-days: 30
