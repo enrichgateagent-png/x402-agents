@@ -51,7 +51,7 @@ echo ">>> [7/9] .env + PM2 ecosystem"
 cat > "$REGISTRY_DIR/.env" <<EOF
 SQLITE_DB_PATH=$DB_PATH
 PORT=8000
-PUBLIC_BASE_URL=http://$GCP_VM_IP:8000
+PUBLIC_BASE_URL=https://registry-ruby.vercel.app
 PORTAL_URL=https://portal-five-phi-54.vercel.app
 GITHUB_TOKEN=$GITHUB_TOKEN
 VALIDATION_TIMEOUT=6
@@ -71,7 +71,7 @@ module.exports = {
       env: {
         SQLITE_DB_PATH: "$DB_PATH",
         PORT: "8000",
-        PUBLIC_BASE_URL: "http://$GCP_VM_IP:8000",
+        PUBLIC_BASE_URL: "https://registry-ruby.vercel.app",
         PORTAL_URL: "https://portal-five-phi-54.vercel.app",
         GITHUB_TOKEN: "$GITHUB_TOKEN",
       },

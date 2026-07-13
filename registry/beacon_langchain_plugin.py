@@ -32,7 +32,7 @@ from langchain_core.callbacks import (
 from langchain_core.tools import BaseTool, tool
 from pydantic import BaseModel, Field
 
-BEACON_REGISTRY_URL = os.environ.get("BEACON_REGISTRY_URL", "http://34.45.7.252:8000").rstrip("/")
+BEACON_REGISTRY_URL = os.environ.get("BEACON_REGISTRY_URL", "https://registry-ruby.vercel.app").rstrip("/")
 DISCOVER_ENDPOINT = f"{BEACON_REGISTRY_URL}/api/v1/discover"
 DEFAULT_LIMIT = 5
 REQUEST_TIMEOUT = 10

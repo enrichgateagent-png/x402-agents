@@ -10,7 +10,7 @@ Purpose: solve the registry's cold-start problem by seeding it with thousands of
 genuine open-source agents/tools that developers can already discover.
 
 Env:
-  REGISTRY_URL   Beacon base URL (default: http://34.45.7.252:8000)
+  REGISTRY_URL   Beacon base URL (default: https://registry-ruby.vercel.app)
   SQLITE_DB_PATH optional — when set (or turso.py is importable), the indexer
                  preloads all known agent_id / mcp_endpoint values into
                  scraped_nodes_cache (in-memory set) on startup so already-indexed
@@ -40,7 +40,7 @@ import requests
 # Configuration
 # --------------------------------------------------------------------------- #
 
-REGISTRY_URL = os.environ.get("REGISTRY_URL", "http://34.67.113.114:8000").rstrip("/")
+REGISTRY_URL = os.environ.get("REGISTRY_URL", "https://registry-ruby.vercel.app").rstrip("/")
 # One-off backlog backfill: re-register already-indexed repos so their
 # crawl-time stars/pushed_at land immediately (bypasses the idempotency skip).
 BACKFILL = os.environ.get("BACKFILL", "0") == "1"

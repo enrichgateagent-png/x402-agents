@@ -1,7 +1,7 @@
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { z } from "zod";
 
-const REGISTRY = (process.env.BEACON_REGISTRY_URL ?? "http://34.45.7.252:8000").replace(/\/$/, "");
+const REGISTRY = (process.env.BEACON_REGISTRY_URL ?? "https://registry-ruby.vercel.app").replace(/\/$/, "");
 
 async function api(path: string, init?: RequestInit): Promise<any> {
   const res = await fetch(`${REGISTRY}${path}`, {

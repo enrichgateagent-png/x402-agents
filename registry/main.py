@@ -36,7 +36,18 @@ import turso
 
 import logging
 
-PUBLIC_BASE_URL = os.environ.get("PUBLIC_BASE_URL", "https://registry-ruby.vercel.app").rstrip("/")
+CANONICAL_REGISTRY_URL = "https://registry-ruby.vercel.app"
+
+
+def _canonical_registry_url() -> str:
+    """Agent-facing docs must never advertise a raw VM IP or plain HTTP endpoint."""
+    raw = (os.environ.get("PUBLIC_BASE_URL") or CANONICAL_REGISTRY_URL).strip().rstrip("/")
+    if "34.45.7.252" in raw or re.match(r"http://\d+\.\d+\.\d+\.\d+", raw):
+        return CANONICAL_REGISTRY_URL
+    return raw
+
+
+PUBLIC_BASE_URL = _canonical_registry_url()
 PORTAL_URL = os.environ.get("PORTAL_URL", "https://portal-five-phi-54.vercel.app").rstrip("/")
 MCP_SSE_URL = os.environ.get("MCP_SSE_URL", "http://34.45.7.252:8001/sse").rstrip("/")
 
@@ -723,7 +734,7 @@ An open-source, programmatically indexed directory tracking {total:,}+ active au
 - GET {PUBLIC_BASE_URL}/api/v1/agents/{{owner}}/{{repo}}/badge.svg : Live SVG status/verification badge.
 - POST {PUBLIC_BASE_URL}/api/v1/manifest/ingest : Register a verified, self-declared agent from a Beacon Agent Manifest. Body: {{"url": "https://.../beacon.json"}}. Standard: https://github.com/enrichgateagent-png/beacon-agent-manifest
 - POST {PUBLIC_BASE_URL}/api/v1/manifest/validate : Schema-check a Beacon Agent Manifest (no side effects). Body: {{"manifest": {{...}}}}.
-- Local Tool Engine (MCP): `npx -y beacon-mcp` — zero-config, zero-auth agent discovery inside Cursor, Claude Desktop, Cline, Windsurf.
+- Local Tool Engine (MCP): `BEACON_REGISTRY_URL={PUBLIC_BASE_URL} npx -y beacon-mcp` — zero-config, zero-auth agent discovery inside Cursor, Claude Desktop, Cline, Windsurf.
 
 ## Data Shape
 Each agent: agent_id (GitHub slug), name, mcp_endpoint, capabilities_tags, stars, health_score, active (pushed within 90 days), success_rate, fraud_status.
