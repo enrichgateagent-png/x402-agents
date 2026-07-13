@@ -153,6 +153,15 @@
           <div id="trendingStrip" class="flex gap-3 overflow-x-auto pb-1 snap-x snap-mandatory"></div>
         </section>
 
+        <!-- SDK adopters (organic registrations) -->
+        <section id="adoptersSection" class="mb-6 hidden">
+          <div class="mb-3 flex items-center justify-between gap-2">
+            <h2 class="text-sm font-semibold text-white">Agents using Beacon</h2>
+            <span class="text-xs text-slate-500">Self-registered via SDK</span>
+          </div>
+          <div id="adoptersStrip" class="flex gap-3 overflow-x-auto pb-1 snap-x snap-mandatory"></div>
+        </section>
+
         <!-- Filter bar (sticky context when browsing results) -->
         <div id="resultsToolbar" class="mb-4 hidden flex-wrap items-center justify-between gap-3">
           <div id="resultMeta" class="text-sm text-slate-500">Search or browse the index</div>
@@ -229,6 +238,9 @@
               <button id="btnCopyManifest" class="w-full rounded-lg border border-void-line py-2 text-xs text-slate-400 hover:text-white transition">
                 Copy agent manifest JSON
               </button>
+              <button id="btnCopyBeaconJson" class="w-full rounded-lg border border-void-line py-2 text-xs text-slate-400 hover:text-white transition">
+                Copy beacon.json (v0.1)
+              </button>
               <a id="btnViewSource" href="#" target="_blank" rel="noopener" class="block text-center text-[11px] text-slate-600 hover:text-slate-400 transition">View source repo ↗</a>
             </div>
           </div>
@@ -287,7 +299,7 @@
     const MAX_DOCK = 8;
     const COUNT_POLL_MS = 30_000;
 
-    let totalCount = 0, page = 0, browseMode = "top", searching = false, currentQuery = "", searchSort = "relevance";
+    let totalCount = 0, page = 0, browseMode = "top", searching = false, currentQuery = "";
     let debounceTimer = null, selectedAgent = null, activeEcosystem = "";
     let dock = [];
 
@@ -329,13 +341,10 @@
       return res.json();
     }
 
-    // UI browse mode -> search API sort. "search" tab = keyword relevance.
-    const SORT_FOR = { search: "relevance", top: "top", health: "healthy", recent: "new" };
-
-    async function searchAgents(q, limit = PAGE_SIZE, sort = "relevance") {
+    async function searchAgents(q, limit = PAGE_SIZE) {
       // Prefer GET /search (FTS, cacheable) — POST /discover as fallback.
       try {
-        const d = await apiGet(`/api/v1/search?q=${encodeURIComponent(q)}&limit=${limit}&sort=${sort}`);
+        const d = await apiGet(`/api/v1/search?q=${encodeURIComponent(q)}&limit=${limit}`);
         return { results: d.results || [], count: d.count ?? (d.results || []).length, semantic_expanded: false };
       } catch {
         const d = await fetch(`${API}/api/v1/discover`, {
@@ -377,6 +386,31 @@
         if (!d.ok || !(d.trending || []).length) return;
         $("trendingSection").classList.remove("hidden");
         $("trendingStrip").innerHTML = d.trending.map(trendingCard).join("");
+      } catch {}
+    }
+
+    function adopterCard(a) {
+      const tags = (a.capabilities_tags || []).slice(0, 2).join(", ");
+      return `
+        <button type="button" class="trend-card trend-pick shrink-0 rounded-xl border border-pulse-violet/20 bg-void-card p-3 text-left transition hover:border-pulse-violet/40" data-agent='${esc(JSON.stringify(a))}'>
+          <div class="truncate text-sm font-medium text-white">${esc(a.name)}</div>
+          <div class="mt-1 truncate font-mono text-[10px] text-slate-500">${esc(a.agent_id)}</div>
+          <div class="mt-2 text-[10px] text-pulse-violet">SDK registered</div>
+          ${tags ? `<div class="mt-1 truncate text-[10px] text-slate-600">${esc(tags)}</div>` : ""}
+        </button>`;
+    }
+
+    async function loadAdopters() {
+      try {
+        const d = await apiGet("/api/v1/radar?limit=12");
+        if (!d.ok || !(d.agents || []).length) return;
+        $("adoptersSection").classList.remove("hidden");
+        $("adoptersStrip").innerHTML = d.agents.map((a) => adopterCard({
+          agent_id: a.agent_id,
+          name: a.name,
+          mcp_endpoint: a.mcp_endpoint,
+          capabilities_tags: a.capabilities_tags,
+        })).join("");
       } catch {}
     }
 
@@ -629,9 +663,8 @@
       }
     }
 
-    async function search(q, keepSort = false) {
+    async function search(q) {
       q = (q || "").trim();
-      if (!keepSort) searchSort = "relevance";
       if (!q) {
         $("heroSection").classList.remove("hidden");
         $("results").innerHTML = "";
@@ -643,15 +676,14 @@
       searching = true;
       currentQuery = q;
       $("searchInput").value = q;
-      setModeActive(searchSort === "relevance" ? "search" : browseMode);
+      setModeActive("search");
       showLoading(true);
       const t0 = performance.now();
       try {
-        const d = await searchAgents(q, PAGE_SIZE, searchSort);
+        const d = await searchAgents(q, PAGE_SIZE);
         const list = d.results || [];
         const ms = ((performance.now() - t0) / 1000).toFixed(2);
-        const how = searchSort === "relevance" ? "matches" : `${{top:"top",healthy:"healthiest",new:"newest"}[searchSort]} matches`;
-        renderResults(list, `${d.count ?? list.length} ${how} for "${q}" · ${ms}s${d.semantic_expanded ? " · semantic" : ""}`);
+        renderResults(list, `${d.count ?? list.length} matches for "${q}" · ${ms}s${d.semantic_expanded ? " · semantic" : ""}`);
         $("pager").classList.add("hidden");
         $("heroSection").classList.add("hidden");
         try { sessionStorage.setItem("beacon:lastQ", q); } catch {}
@@ -702,20 +734,10 @@
     function wireBrowseFilters(root) {
       root.addEventListener("click", (e) => {
         const b = e.target.closest(".mode-btn");
-        if (!b) return;
-        // With an active query, the tabs re-sort the SEARCH (top/healthy/new)
-        // instead of dropping the filter and jumping to the global browse.
-        if (searching && currentQuery) {
-          searchSort = b.dataset.mode === "search" ? "relevance" : SORT_FOR[b.dataset.mode];
-          browseMode = b.dataset.mode;
-          search(currentQuery, true);
-          return;
-        }
-        if (b.dataset.mode === "search") return;
+        if (!b || b.dataset.mode === "search") return;
         browseMode = b.dataset.mode;
         page = 0;
         $("searchInput").value = "";
-        searchSort = "relevance";
         setEcosystemActive("");
         loadBrowse();
       });
@@ -751,6 +773,12 @@
       const a = parseAgentFromEl(e.target);
       if (a) inspect(a);
     });
+    $("adoptersStrip").addEventListener("click", (e) => {
+      const card = e.target.closest(".trend-pick");
+      if (!card) return;
+      const a = parseAgentFromEl(e.target);
+      if (a) inspect(a);
+    });
 
     $("dockList").addEventListener("click", (e) => {
       if (e.target.closest(".remove-dock")) { removeFromDock(e.target.closest(".remove-dock").dataset.id); return; }
@@ -761,6 +789,15 @@
     $("btnWirePrimary").addEventListener("click", () => { if (selectedAgent) wireAgent({ ...selectedAgent, capabilities_tags: selectedAgent.capabilities || selectedAgent.capabilities_tags }); });
     $("btnCopyMcp").addEventListener("click", () => { if (selectedAgent) { navigator.clipboard?.writeText(mcpSnippet(selectedAgent)); toast("MCP snippet copied"); } });
     $("btnCopyManifest").addEventListener("click", () => { if (selectedAgent) { navigator.clipboard?.writeText(JSON.stringify(agentManifest(selectedAgent), null, 2)); toast("Manifest copied"); } });
+    $("btnCopyBeaconJson").addEventListener("click", async () => {
+      if (!selectedAgent?.agent_id) return;
+      try {
+        const q = encodeURIComponent(selectedAgent.agent_id);
+        const txt = await fetch(`${API}/api/v1/agents/${q}/beacon.json`).then((r) => r.text());
+        await navigator.clipboard?.writeText(txt);
+        toast("beacon.json copied");
+      } catch { toast("Could not fetch beacon.json"); }
+    });
     $("btnExportStack").addEventListener("click", exportStack);
     $("btnClearDock").addEventListener("click", () => { dock = []; saveDock(); hideInspector(); toast("Dock cleared"); });
     $("copyEditorMcp").addEventListener("click", () => {
@@ -788,7 +825,7 @@
     loadDock();
     (async () => {
       await refreshRegistryCount();
-      await loadTrending();
+      await Promise.all([loadTrending(), loadAdopters()]);
       try {
         const last = sessionStorage.getItem("beacon:lastQ");
         if (last) $("searchInput").value = last;

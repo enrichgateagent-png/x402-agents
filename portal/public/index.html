@@ -153,6 +153,15 @@
           <div id="trendingStrip" class="flex gap-3 overflow-x-auto pb-1 snap-x snap-mandatory"></div>
         </section>
 
+        <!-- SDK adopters (organic registrations) -->
+        <section id="adoptersSection" class="mb-6 hidden">
+          <div class="mb-3 flex items-center justify-between gap-2">
+            <h2 class="text-sm font-semibold text-white">Agents using Beacon</h2>
+            <span class="text-xs text-slate-500">Self-registered via SDK</span>
+          </div>
+          <div id="adoptersStrip" class="flex gap-3 overflow-x-auto pb-1 snap-x snap-mandatory"></div>
+        </section>
+
         <!-- Filter bar (sticky context when browsing results) -->
         <div id="resultsToolbar" class="mb-4 hidden flex-wrap items-center justify-between gap-3">
           <div id="resultMeta" class="text-sm text-slate-500">Search or browse the index</div>
@@ -228,6 +237,9 @@
               </button>
               <button id="btnCopyManifest" class="w-full rounded-lg border border-void-line py-2 text-xs text-slate-400 hover:text-white transition">
                 Copy agent manifest JSON
+              </button>
+              <button id="btnCopyBeaconJson" class="w-full rounded-lg border border-void-line py-2 text-xs text-slate-400 hover:text-white transition">
+                Copy beacon.json (v0.1)
               </button>
               <a id="btnViewSource" href="#" target="_blank" rel="noopener" class="block text-center text-[11px] text-slate-600 hover:text-slate-400 transition">View source repo ↗</a>
             </div>
@@ -374,6 +386,31 @@
         if (!d.ok || !(d.trending || []).length) return;
         $("trendingSection").classList.remove("hidden");
         $("trendingStrip").innerHTML = d.trending.map(trendingCard).join("");
+      } catch {}
+    }
+
+    function adopterCard(a) {
+      const tags = (a.capabilities_tags || []).slice(0, 2).join(", ");
+      return `
+        <button type="button" class="trend-card trend-pick shrink-0 rounded-xl border border-pulse-violet/20 bg-void-card p-3 text-left transition hover:border-pulse-violet/40" data-agent='${esc(JSON.stringify(a))}'>
+          <div class="truncate text-sm font-medium text-white">${esc(a.name)}</div>
+          <div class="mt-1 truncate font-mono text-[10px] text-slate-500">${esc(a.agent_id)}</div>
+          <div class="mt-2 text-[10px] text-pulse-violet">SDK registered</div>
+          ${tags ? `<div class="mt-1 truncate text-[10px] text-slate-600">${esc(tags)}</div>` : ""}
+        </button>`;
+    }
+
+    async function loadAdopters() {
+      try {
+        const d = await apiGet("/api/v1/radar?limit=12");
+        if (!d.ok || !(d.agents || []).length) return;
+        $("adoptersSection").classList.remove("hidden");
+        $("adoptersStrip").innerHTML = d.agents.map((a) => adopterCard({
+          agent_id: a.agent_id,
+          name: a.name,
+          mcp_endpoint: a.mcp_endpoint,
+          capabilities_tags: a.capabilities_tags,
+        })).join("");
       } catch {}
     }
 
@@ -736,6 +773,12 @@
       const a = parseAgentFromEl(e.target);
       if (a) inspect(a);
     });
+    $("adoptersStrip").addEventListener("click", (e) => {
+      const card = e.target.closest(".trend-pick");
+      if (!card) return;
+      const a = parseAgentFromEl(e.target);
+      if (a) inspect(a);
+    });
 
     $("dockList").addEventListener("click", (e) => {
       if (e.target.closest(".remove-dock")) { removeFromDock(e.target.closest(".remove-dock").dataset.id); return; }
@@ -746,6 +789,15 @@
     $("btnWirePrimary").addEventListener("click", () => { if (selectedAgent) wireAgent({ ...selectedAgent, capabilities_tags: selectedAgent.capabilities || selectedAgent.capabilities_tags }); });
     $("btnCopyMcp").addEventListener("click", () => { if (selectedAgent) { navigator.clipboard?.writeText(mcpSnippet(selectedAgent)); toast("MCP snippet copied"); } });
     $("btnCopyManifest").addEventListener("click", () => { if (selectedAgent) { navigator.clipboard?.writeText(JSON.stringify(agentManifest(selectedAgent), null, 2)); toast("Manifest copied"); } });
+    $("btnCopyBeaconJson").addEventListener("click", async () => {
+      if (!selectedAgent?.agent_id) return;
+      try {
+        const q = encodeURIComponent(selectedAgent.agent_id);
+        const txt = await fetch(`${API}/api/v1/agents/${q}/beacon.json`).then((r) => r.text());
+        await navigator.clipboard?.writeText(txt);
+        toast("beacon.json copied");
+      } catch { toast("Could not fetch beacon.json"); }
+    });
     $("btnExportStack").addEventListener("click", exportStack);
     $("btnClearDock").addEventListener("click", () => { dock = []; saveDock(); hideInspector(); toast("Dock cleared"); });
     $("copyEditorMcp").addEventListener("click", () => {
@@ -773,7 +825,7 @@
     loadDock();
     (async () => {
       await refreshRegistryCount();
-      await loadTrending();
+      await Promise.all([loadTrending(), loadAdopters()]);
       try {
         const last = sessionStorage.getItem("beacon:lastQ");
         if (last) $("searchInput").value = last;

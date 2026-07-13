@@ -494,7 +494,50 @@ def _agent_detail(row: dict) -> dict:
         "ok": True,
         "agent": pub,
         "install": _agent_install_manifest(pub["agent_id"], pub),
+        "beacon_json": f"{PUBLIC_BASE_URL}/api/v1/agents/{quote(pub['agent_id'], safe='')}/beacon.json",
         "schema": _agent_schema(),
+    }
+
+
+def _build_beacon_manifest(pub: dict) -> dict:
+    """Draft beacon.json v0.1 from an indexed agent row (for copy-paste / outreach)."""
+    aid = pub["agent_id"]
+    raw_caps = pub.get("capabilities_tags") or []
+    capabilities: list[str] = []
+    for c in raw_caps:
+        c = re.sub(r"[^a-z0-9-]", "-", str(c).lower().strip())
+        c = re.sub(r"-+", "-", c).strip("-")
+        if c and _MANIFEST_CAP_RE.match(c) and c not in capabilities:
+            capabilities.append(c)
+        if len(capabilities) >= 25:
+            break
+    if not capabilities:
+        capabilities = ["agent"]
+
+    ep = (pub.get("mcp_endpoint") or "").strip()
+    interfaces: list[dict] = []
+    if ep.lower().startswith("npx"):
+        interfaces.append({"type": "npx", "endpoint": ep})
+    elif ep.startswith(("http://", "https://")):
+        iface_type = "mcp" if "github.com" in ep.lower() else "http"
+        interfaces.append({"type": iface_type, "endpoint": ep})
+    elif ep:
+        interfaces.append({"type": "mcp", "endpoint": ep})
+
+    github = f"https://github.com/{aid}" if "/" in aid else ep
+    if not interfaces:
+        interfaces.append({"type": "mcp", "endpoint": github})
+
+    cap_preview = ", ".join(raw_caps[:4]) if raw_caps else "AI agent"
+    return {
+        "beacon_manifest": _MANIFEST_VERSION,
+        "id": aid,
+        "name": pub.get("name") or aid.split("/")[-1],
+        "description": f"Open-source AI agent — {cap_preview}.",
+        "capabilities": capabilities,
+        "interfaces": interfaces[:10],
+        "source": github if "github.com" in github else ep or github,
+        "homepage": github if "github.com" in github else (ep or github),
     }
 
 
@@ -1015,6 +1058,27 @@ def discovery_tags() -> dict:
         else None,
         "cache_ttl_secs": _TAG_CACHE_TTL_SECS,
     }
+
+
+@app.get("/api/v1/agents/{agent_id:path}/beacon.json")
+def get_agent_beacon_manifest(agent_id: str) -> Response:
+    """Generate a draft beacon.json for any indexed agent (copy into repo root)."""
+    _ensure_ready()
+    if agent_id.endswith("/badge.svg"):
+        raise HTTPException(status_code=404, detail="not found")
+    rows = turso.execute("SELECT * FROM agents WHERE agent_id = ?", [agent_id])
+    if not rows:
+        raise HTTPException(status_code=404, detail=f"agent '{agent_id}' not found")
+    pub = _row_to_public(rows[0])
+    body = json.dumps(_build_beacon_manifest(pub), indent=2) + "\n"
+    return Response(
+        content=body,
+        media_type="application/json; charset=utf-8",
+        headers={
+            "Cache-Control": "public, max-age=3600",
+            "Content-Disposition": f'inline; filename="beacon.json"',
+        },
+    )
 
 
 @app.get("/api/v1/agents/{agent_id:path}")
