@@ -1,0 +1,42 @@
+name: Beacon IndexNow
+
+# Push the /discover pages to Bing/IndexNow (which powers ChatGPT Search, Copilot,
+# DuckDuckGo). Re-pings weekly so new pages and content changes get picked up fast.
+on:
+  schedule:
+    - cron: "30 6 * * 1"   # weekly, Monday 06:30 UTC
+  workflow_dispatch: {}
+
+concurrency:
+  group: beacon-indexnow
+  cancel-in-progress: false
+
+jobs:
+  submit:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Submit discover pages to IndexNow
+        working-directory: registry
+        run: |
+          python - <<'PY'
+          import json, urllib.request, urllib.error, seo
+          KEY = "f2471131bfef1dcf3b4f3c3940fae849"
+          HOST = "registry-ruby.vercel.app"
+          base = f"https://{HOST}"
+          urls = [f"{base}/"] + [f"{base}/discover/{s}" for s, _ in seo.CAPABILITIES]
+          payload = {"host": HOST, "key": KEY,
+                     "keyLocation": f"{base}/{KEY}.txt", "urlList": urls}
+          req = urllib.request.Request(
+              "https://api.indexnow.org/indexnow",
+              data=json.dumps(payload).encode(),
+              headers={"Content-Type": "application/json; charset=utf-8"})
+          try:
+              with urllib.request.urlopen(req, timeout=30) as r:
+                  print(f"IndexNow HTTP {r.status} — submitted {len(urls)} URLs")
+          except urllib.error.HTTPError as e:
+              print(f"IndexNow HTTP {e.code}: {e.read().decode()[:200]}")
+          PY
