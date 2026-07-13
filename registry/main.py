@@ -535,7 +535,7 @@ def validate_agent_endpoint(agent_id: str, endpoint: str) -> bool:
 # Models
 # --------------------------------------------------------------------------- #
 
-_KNOWN_SOURCES = {"sdk", "scraper", "auto-inject", "eliza", "manual"}
+_KNOWN_SOURCES = {"sdk", "scraper", "auto-inject", "eliza", "manual", "manifest"}
 
 
 class RegisterRequest(BaseModel):
@@ -1020,8 +1020,10 @@ def register(req: RegisterRequest, background_tasks: BackgroundTasks) -> dict:
     # Integrity guard: a bare github.com repo URL can only originate from the
     # harvester, never from a real self-registering agent. Force 'scraper' so the
     # organic-vs-scraped analytics can't be polluted by a mislabeled source.
+    # 'manifest' is exempt: it is location-verified self-declaration (strongest
+    # signal), even when the endpoint is a github URL.
     source = req.source
-    if "github.com" in req.mcp_endpoint.lower():
+    if "github.com" in req.mcp_endpoint.lower() and source != "manifest":
         source = "scraper"
 
     existing = turso.execute("SELECT agent_id FROM agents WHERE agent_id = ?", [req.agent_id])
@@ -1077,6 +1079,125 @@ def register(req: RegisterRequest, background_tasks: BackgroundTasks) -> dict:
         "badge_url": badge_url,
         "badge_markdown": badge_markdown,
     }
+
+
+# --------------------------------------------------------------------------- #
+# Beacon Agent Manifest v0.1 — reference implementation of the open standard.
+# Spec: a thin, framework-neutral JSON an agent publishes to declare identity +
+# capabilities + how to reach it. Self-declared, location-verified. Reputation
+# is never in the manifest — Beacon observes it. See beacon-agent-manifest/SPEC.md
+# --------------------------------------------------------------------------- #
+
+_MANIFEST_VERSION = "0.1"
+_MANIFEST_IFACE_TYPES = {"mcp", "http", "npx", "python", "a2a", "openapi"}
+_MANIFEST_ID_RE = re.compile(r"^[A-Za-z0-9._-]+/[A-Za-z0-9._-]+$")
+_MANIFEST_CAP_RE = re.compile(r"^[a-z0-9][a-z0-9-]{1,40}$")
+
+
+def _validate_manifest(m: object) -> list[str]:
+    """Validate a manifest against the v0.1 schema. Returns a list of errors
+    ([] == valid). Kept dependency-free and faithful to the JSON Schema."""
+    errs: list[str] = []
+    if not isinstance(m, dict):
+        return ["manifest must be a JSON object"]
+    if m.get("beacon_manifest") != _MANIFEST_VERSION:
+        errs.append(f"beacon_manifest must be '{_MANIFEST_VERSION}'")
+    _id = m.get("id")
+    if not isinstance(_id, str) or not _MANIFEST_ID_RE.match(_id or ""):
+        errs.append("id must match 'owner/name' (e.g. a GitHub slug)")
+    if not isinstance(m.get("name"), str) or not (m.get("name") or "").strip():
+        errs.append("name is required")
+    caps = m.get("capabilities")
+    if not isinstance(caps, list) or not (1 <= len(caps) <= 25):
+        errs.append("capabilities must be a list of 1–25 tags")
+    elif any(not isinstance(c, str) or not _MANIFEST_CAP_RE.match(c) for c in caps):
+        errs.append("each capability must be lowercase kebab-case (e.g. 'web-scraping')")
+    ifaces = m.get("interfaces")
+    if not isinstance(ifaces, list) or not (1 <= len(ifaces) <= 10):
+        errs.append("interfaces must be a list of 1–10 entries")
+    elif any(not isinstance(i, dict) or i.get("type") not in _MANIFEST_IFACE_TYPES for i in ifaces):
+        errs.append(f"each interface needs a type in {sorted(_MANIFEST_IFACE_TYPES)}")
+    return errs
+
+
+def _manifest_endpoint(m: dict) -> str:
+    """Pick the primary reachable URL from a manifest, for Beacon's mcp_endpoint."""
+    for iface in m.get("interfaces", []):
+        if isinstance(iface, dict) and iface.get("endpoint"):
+            return iface["endpoint"]
+    return m.get("source") or m.get("homepage") or ""
+
+
+class ManifestValidateRequest(BaseModel):
+    manifest: dict
+
+
+class ManifestIngestRequest(BaseModel):
+    url: str = Field(..., min_length=8, max_length=2048)
+
+
+@app.post("/api/v1/manifest/validate")
+def manifest_validate(req: ManifestValidateRequest) -> dict:
+    """Schema-check a Beacon Agent Manifest. No side effects."""
+    errors = _validate_manifest(req.manifest)
+    return {"ok": not errors, "valid": not errors, "version": _MANIFEST_VERSION, "errors": errors}
+
+
+@app.post("/api/v1/manifest/ingest")
+def manifest_ingest(req: ManifestIngestRequest, background_tasks: BackgroundTasks) -> dict:
+    """Fetch a manifest from a controlled location, validate it, and register the
+    agent as a verified, self-declared entry. Location is the proof of ownership:
+      - <domain>/.well-known/beacon.json  -> domain verified
+      - a repo's raw beacon.json          -> repo verified
+    """
+    _ensure_ready()
+    from urllib.parse import urlparse
+
+    url = req.url.strip()
+    parsed = urlparse(url)
+    if parsed.scheme not in ("https", "http"):
+        raise HTTPException(status_code=400, detail="url must be http(s)")
+
+    try:
+        import urllib.request
+        with urllib.request.urlopen(url, timeout=10) as resp:  # noqa: S310 (reference impl)
+            raw = resp.read(256 * 1024)  # 256KB cap
+        manifest = json.loads(raw.decode("utf-8"))
+    except Exception as exc:
+        raise HTTPException(status_code=400, detail=f"could not fetch/parse manifest: {exc}")
+
+    errors = _validate_manifest(manifest)
+    if errors:
+        raise HTTPException(status_code=422, detail={"message": "invalid manifest", "errors": errors})
+
+    # Location-based verification.
+    host = parsed.netloc.lower()
+    path = parsed.path.lower()
+    if path.endswith("/.well-known/beacon.json"):
+        verified_via = {"method": "domain", "domain": host}
+    elif host == "raw.githubusercontent.com":
+        parts = [p for p in parsed.path.split("/") if p]
+        repo = "/".join(parts[:2]) if len(parts) >= 2 else host
+        verified_via = {"method": "repo", "repo": repo}
+    else:
+        verified_via = {"method": "location", "host": host}
+
+    endpoint = _manifest_endpoint(manifest)
+    if not endpoint:
+        raise HTTPException(status_code=422, detail="manifest has no reachable interface endpoint or source")
+
+    reg = RegisterRequest(
+        agent_id=manifest["id"],
+        name=manifest["name"],
+        mcp_endpoint=endpoint,
+        capabilities=",".join(manifest.get("capabilities", [])),
+        source="manifest",
+    )
+    result = register(reg, background_tasks)
+    result["verified"] = True
+    result["verified_via"] = verified_via
+    result["manifest_version"] = _MANIFEST_VERSION
+    return result
 
 
 # Lightweight semantic map: each concept -> related capability tokens. Used only
