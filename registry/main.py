@@ -281,13 +281,46 @@ def _fts_query(raw: str) -> str:
     return " OR ".join(parts) if parts else ""
 
 
+# A repo is "dead" once it hasn't been pushed in this long. We only ever prune
+# rows that HAVE a pushed_at older than the cutoff — non-GitHub sources (npm /
+# HuggingFace / PyPI) that legitimately carry no pushed_at are never dropped.
+_DEAD_AFTER = "-2 years"
+# Prefix-aliased and bare variants so the clause slots into both query branches.
+_LIVE_CLAUSE_A = " AND (a.pushed_at IS NULL OR substr(a.pushed_at, 1, 10) >= date('now', ?))"
+_LIVE_CLAUSE = " AND (pushed_at IS NULL OR substr(pushed_at, 1, 10) >= date('now', ?))"
+
+
+def _freshness_tier_sql(col: str = "pushed_at") -> str:
+    """SQL freshness bucket mirroring health_score's intent: fresher = higher.
+
+    'stars lie' — so we rank by maintenance recency FIRST, then popularity. A
+    famous-but-stale repo (e.g. pushed 14 months ago) drops below every actively
+    maintained agent instead of floating to the top on raw star count. Bucketed
+    (not continuous) so within a tier the real ranker — relevance/stars — still
+    orders results. Non-GitHub rows (null pushed_at) sit just under 'active'.
+    """
+    return f"""CASE
+        WHEN {col} IS NULL THEN 3
+        WHEN substr({col}, 1, 10) >= date('now', '-90 days')  THEN 4
+        WHEN substr({col}, 1, 10) >= date('now', '-365 days') THEN 3
+        WHEN substr({col}, 1, 10) >= date('now', '-2 years')  THEN 2
+        ELSE 1
+    END"""
+
+
 def _search_agents_core(
     q: str,
     limit: int = 20,
     offset: int = 0,
     category: Optional[str] = None,
+    include_inactive: bool = False,
 ) -> list[dict]:
-    """Internal search — used by /api/v1/search and SEO /discover pages."""
+    """Internal search — used by /api/v1/search and SEO /discover pages.
+
+    By default, clearly-dead repos (pushed_at older than 2 years) are hidden so
+    results stay sharp for agent clients. Pass include_inactive=True to include
+    the full, comprehensive set.
+    """
     _ensure_ready()
     q = (q or "").strip()
     if not q:
@@ -304,9 +337,12 @@ def _search_agents_core(
         try:
             cat_clause = ""
             args: list = [fts_q]
+            live_clause = "" if include_inactive else _LIVE_CLAUSE_A
             if category:
                 cat_clause = " AND (',' || a.capabilities_tags || ',') LIKE ?"
                 args.append(f"%,{category},%")
+            if not include_inactive:
+                args.append(_DEAD_AFTER)
             args.extend([limit, offset])
 
             rows = turso.execute(
@@ -317,7 +353,9 @@ def _search_agents_core(
                  WHERE agents_fts MATCH ?
                    AND a.is_fraudulent = 0
                    {cat_clause}
-                 ORDER BY rank, a.stars DESC, a.success_rate DESC
+                   {live_clause}
+                 ORDER BY {_freshness_tier_sql('a.pushed_at')} DESC,
+                          rank, a.stars DESC, a.success_rate DESC
                  LIMIT ? OFFSET ?
                 """,
                 args,
@@ -330,9 +368,12 @@ def _search_agents_core(
         like = f"%{q.lower()}%"
         cat_clause = ""
         args = [like, like, like, like]
+        live_clause = "" if include_inactive else _LIVE_CLAUSE
         if category:
             cat_clause = " AND (',' || capabilities_tags || ',') LIKE ?"
             args.append(f"%,{category},%")
+        if not include_inactive:
+            args.append(_DEAD_AFTER)
         args.extend([limit, offset])
 
         rows = turso.execute(
@@ -346,7 +387,9 @@ def _search_agents_core(
                  OR LOWER(capabilities_tags) LIKE ?
                )
                {cat_clause}
-             ORDER BY stars DESC, success_rate DESC
+               {live_clause}
+             ORDER BY {_freshness_tier_sql('pushed_at')} DESC,
+                      stars DESC, success_rate DESC
              LIMIT ? OFFSET ?
             """,
             args,
@@ -803,11 +846,16 @@ def search_agents(
     offset: int = 0,
     category: Optional[str] = None,
     include_total: bool = False,
+    include_inactive: bool = False,
 ) -> dict:
     """
     Full-text search across name, mcp_endpoint (github URL), and capability tags.
     Uses FTS5 with prefix matching; falls back to indexed LIKE for edge cases.
     Set include_total=true only when paginating — skips an extra COUNT for speed.
+
+    By default, clearly-dead repos (not pushed in 2+ years) are hidden to keep
+    results sharp for agent clients. Pass include_inactive=true for the full,
+    comprehensive set (stale repos included, still demoted by health_score).
     """
     _ensure_ready()
     q = (q or "").strip()
@@ -818,7 +866,9 @@ def search_agents(
     offset = max(0, offset)
     category = (category or "").strip().lower() or None
     t0 = time.perf_counter()
-    results = _search_agents_core(q, limit=limit, offset=offset, category=category)
+    results = _search_agents_core(
+        q, limit=limit, offset=offset, category=category, include_inactive=include_inactive
+    )
     total = len(results)
 
     if include_total:
@@ -828,6 +878,10 @@ def search_agents(
         if category:
             cat_clause = " AND (',' || capabilities_tags || ',') LIKE ?"
             count_args.append(f"%,{category},%")
+        live_clause = ""
+        if not include_inactive:
+            live_clause = _LIVE_CLAUSE
+            count_args.append(_DEAD_AFTER)
         count_row = turso.execute(
             f"""
             SELECT COUNT(*) AS c FROM agents
@@ -839,6 +893,7 @@ def search_agents(
                  OR LOWER(capabilities_tags) LIKE ?
                )
                {cat_clause}
+               {live_clause}
             """,
             count_args,
         )
@@ -849,6 +904,7 @@ def search_agents(
         "ok": True,
         "query": q,
         "category": category,
+        "include_inactive": include_inactive,
         "count": len(results),
         "total": total,
         "limit": limit,

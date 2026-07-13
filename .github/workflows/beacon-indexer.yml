@@ -29,7 +29,7 @@ jobs:
           # The workflow's built-in token lifts GitHub API limits to 5000/hr.
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           # Override if your registry URL changes; secret takes precedence.
-          REGISTRY_URL: ${{ secrets.REGISTRY_URL || 'http://34.45.7.252:8000' }}
+          REGISTRY_URL: ${{ secrets.REGISTRY_URL || 'http://34.67.113.114:8000' }}
           MAX_PAGES: "10"
           MAX_PER_QUERY: "1000"
           THROTTLE_SECS: "1"
@@ -41,7 +41,7 @@ jobs:
         # a transient validator hiccup.
         continue-on-error: true
         env:
-          REGISTRY_URL: ${{ secrets.REGISTRY_URL || 'http://34.45.7.252:8000' }}
+          REGISTRY_URL: ${{ secrets.REGISTRY_URL || 'http://34.67.113.114:8000' }}
         run: |
           echo "Triggering batch validation..."
           curl -sS -X POST "${REGISTRY_URL%/}/api/v1/validate?limit=100" \

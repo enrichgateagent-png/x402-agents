@@ -1,5 +1,5 @@
 # Deploy Beacon registry to GCP VM after code changes.
-# Requires repo secret GCP_SSH_KEY (private key for areej@34.45.7.252).
+# Requires repo secret GCP_SSH_KEY (private key for areej@34.67.113.114).
 name: Deploy registry to GCP
 
 on:
@@ -23,7 +23,7 @@ jobs:
       - name: Upload registry files
         uses: appleboy/scp-action@v0.1.7
         with:
-          host: 34.45.7.252
+          host: 34.67.113.114
           username: areej
           key: ${{ secrets.GCP_SSH_KEY }}
           source: "registry/main.py,registry/analytics.py"
@@ -32,7 +32,7 @@ jobs:
       - name: Upload start script
         uses: appleboy/scp-action@v0.1.7
         with:
-          host: 34.45.7.252
+          host: 34.67.113.114
           username: areej
           key: ${{ secrets.GCP_SSH_KEY }}
           source: "scripts/start-beacon.sh"
@@ -41,7 +41,7 @@ jobs:
       - name: Restart PM2
         uses: appleboy/ssh-action@v1.0.3
         with:
-          host: 34.45.7.252
+          host: 34.67.113.114
           username: areej
           key: ${{ secrets.GCP_SSH_KEY }}
           script: |
