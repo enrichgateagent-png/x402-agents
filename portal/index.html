@@ -287,7 +287,7 @@
     const MAX_DOCK = 8;
     const COUNT_POLL_MS = 30_000;
 
-    let totalCount = 0, page = 0, browseMode = "top", searching = false, currentQuery = "";
+    let totalCount = 0, page = 0, browseMode = "top", searching = false, currentQuery = "", searchSort = "relevance";
     let debounceTimer = null, selectedAgent = null, activeEcosystem = "";
     let dock = [];
 
@@ -329,10 +329,13 @@
       return res.json();
     }
 
-    async function searchAgents(q, limit = PAGE_SIZE) {
+    // UI browse mode -> search API sort. "search" tab = keyword relevance.
+    const SORT_FOR = { search: "relevance", top: "top", health: "healthy", recent: "new" };
+
+    async function searchAgents(q, limit = PAGE_SIZE, sort = "relevance") {
       // Prefer GET /search (FTS, cacheable) — POST /discover as fallback.
       try {
-        const d = await apiGet(`/api/v1/search?q=${encodeURIComponent(q)}&limit=${limit}`);
+        const d = await apiGet(`/api/v1/search?q=${encodeURIComponent(q)}&limit=${limit}&sort=${sort}`);
         return { results: d.results || [], count: d.count ?? (d.results || []).length, semantic_expanded: false };
       } catch {
         const d = await fetch(`${API}/api/v1/discover`, {
@@ -626,8 +629,9 @@
       }
     }
 
-    async function search(q) {
+    async function search(q, keepSort = false) {
       q = (q || "").trim();
+      if (!keepSort) searchSort = "relevance";
       if (!q) {
         $("heroSection").classList.remove("hidden");
         $("results").innerHTML = "";
@@ -639,14 +643,15 @@
       searching = true;
       currentQuery = q;
       $("searchInput").value = q;
-      setModeActive("search");
+      setModeActive(searchSort === "relevance" ? "search" : browseMode);
       showLoading(true);
       const t0 = performance.now();
       try {
-        const d = await searchAgents(q, PAGE_SIZE);
+        const d = await searchAgents(q, PAGE_SIZE, searchSort);
         const list = d.results || [];
         const ms = ((performance.now() - t0) / 1000).toFixed(2);
-        renderResults(list, `${d.count ?? list.length} matches for "${q}" · ${ms}s${d.semantic_expanded ? " · semantic" : ""}`);
+        const how = searchSort === "relevance" ? "matches" : `${{top:"top",healthy:"healthiest",new:"newest"}[searchSort]} matches`;
+        renderResults(list, `${d.count ?? list.length} ${how} for "${q}" · ${ms}s${d.semantic_expanded ? " · semantic" : ""}`);
         $("pager").classList.add("hidden");
         $("heroSection").classList.add("hidden");
         try { sessionStorage.setItem("beacon:lastQ", q); } catch {}
@@ -697,10 +702,20 @@
     function wireBrowseFilters(root) {
       root.addEventListener("click", (e) => {
         const b = e.target.closest(".mode-btn");
-        if (!b || b.dataset.mode === "search") return;
+        if (!b) return;
+        // With an active query, the tabs re-sort the SEARCH (top/healthy/new)
+        // instead of dropping the filter and jumping to the global browse.
+        if (searching && currentQuery) {
+          searchSort = b.dataset.mode === "search" ? "relevance" : SORT_FOR[b.dataset.mode];
+          browseMode = b.dataset.mode;
+          search(currentQuery, true);
+          return;
+        }
+        if (b.dataset.mode === "search") return;
         browseMode = b.dataset.mode;
         page = 0;
         $("searchInput").value = "";
+        searchSort = "relevance";
         setEcosystemActive("");
         loadBrowse();
       });
