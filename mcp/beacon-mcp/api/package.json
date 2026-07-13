@@ -1,0 +1,6 @@
+{
+  "name": "beacon-mcp",
+  "version": "0.1.4",
+  "private": true,
+  "type": "module"
+}

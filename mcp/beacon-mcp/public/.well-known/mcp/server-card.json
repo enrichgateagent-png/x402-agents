@@ -1,0 +1,31 @@
+{
+  "$schema": "https://static.modelcontextprotocol.io/schemas/2025-10-17/server-card.schema.json",
+  "name": "Beacon",
+  "description": "Search 33,000+ open-source AI agents and MCP servers by capability. Tools: find_agent, top_agents, agent_details.",
+  "version": "0.1.4",
+  "repository": {
+    "url": "https://github.com/enrichgateagent-png/x402-agents",
+    "source": "github",
+    "subfolder": "mcp/beacon-mcp"
+  },
+  "remotes": [
+    {
+      "type": "streamable-http",
+      "url": "https://beacon-mcp-taupe.vercel.app/mcp"
+    }
+  ],
+  "packages": [
+    {
+      "registryType": "npm",
+      "identifier": "beacon-mcp",
+      "transport": { "type": "stdio" },
+      "environmentVariables": [
+        {
+          "name": "BEACON_REGISTRY_URL",
+          "description": "Beacon registry base URL",
+          "isRequired": false
+        }
+      ]
+    }
+  ]
+}

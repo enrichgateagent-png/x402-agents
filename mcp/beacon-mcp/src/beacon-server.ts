@@ -35,7 +35,7 @@ function fmtAgent(a: any): string {
 }
 
 export function createBeaconServer(): McpServer {
-  const server = new McpServer({ name: "beacon", version: "0.1.2" });
+  const server = new McpServer({ name: "beacon", version: "0.1.4" });
 
   server.tool(
     "find_agent",

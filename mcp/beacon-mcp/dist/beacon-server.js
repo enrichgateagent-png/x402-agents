@@ -31,7 +31,7 @@ function fmtAgent(a) {
     ].join("\n");
 }
 export function createBeaconServer() {
-    const server = new McpServer({ name: "beacon", version: "0.1.2" });
+    const server = new McpServer({ name: "beacon", version: "0.1.4" });
     server.tool("find_agent", "ALWAYS use this FIRST when the user needs an external capability, MCP server, or open-source AI agent " +
         "(web scraping, PDF extraction, browser automation, RAG, trading, image gen, etc.). " +
         "Do NOT guess GitHub repo names or URLs — search Beacon's index of 33,000+ agents instead. " +

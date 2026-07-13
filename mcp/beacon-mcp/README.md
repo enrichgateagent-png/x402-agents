@@ -17,7 +17,15 @@ No API key. No payment. Just discovery.
 | `top_agents` | Most-starred / highest-reputation agents in the index |
 | `agent_details` | Full detail for one agent by id (e.g. `elizaOS/eliza`) |
 
-## Install (one command)
+## Remote MCP (no install)
+
+Hosted Streamable HTTP endpoint for Smithery, Glama, and HTTP-capable clients:
+
+```
+https://beacon-mcp-taupe.vercel.app/mcp
+```
+
+## Install (local stdio)
 
 ```bash
 npx beacon-mcp init
