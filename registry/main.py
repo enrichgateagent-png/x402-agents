@@ -850,7 +850,8 @@ def seo_discover(slug: str) -> Response:
     total = int(turso.execute("SELECT COUNT(*) AS c FROM agents")[0]["c"])
     html_body, _count, indexable = seo.build_discover_page(
         slug,
-        lambda q, lim: _search_agents_core(q, limit=lim),
+        # sort=top so "Best X agents" pages showcase proven, high-traction agents.
+        lambda q, lim: _search_agents_core(q, limit=lim, sort="top"),
         total,
     )
     if not indexable:

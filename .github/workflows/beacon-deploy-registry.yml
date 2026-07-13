@@ -26,7 +26,7 @@ jobs:
           host: 34.67.113.114
           username: areej
           key: ${{ secrets.GCP_SSH_KEY }}
-          source: "registry/main.py,registry/analytics.py"
+          source: "registry/main.py,registry/analytics.py,registry/seo.py"
           # strip the leading "registry/" so files land at
           # ~/x402-agents/registry/main.py — NOT nested at registry/registry/…
           strip_components: 1
