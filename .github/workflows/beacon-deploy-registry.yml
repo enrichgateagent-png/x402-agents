@@ -43,10 +43,13 @@ jobs:
 
       - name: Restart PM2
         uses: appleboy/ssh-action@v1.0.3
+        env:
+          ADMIN_SECRET_PASSWORD: ${{ secrets.ADMIN_SECRET_PASSWORD }}
         with:
           host: 34.67.113.114
           username: areej
           key: ${{ secrets.GCP_SSH_KEY }}
+          envs: ADMIN_SECRET_PASSWORD
           script: |
             export PATH="$HOME/.nvm/versions/node/v20.20.2/bin:$HOME/beacon-venv/bin:$PATH"
             mv -f ~/start-beacon.sh ~/start-beacon.sh 2>/dev/null || true
@@ -59,7 +62,10 @@ jobs:
             rm -f ~/x402-agents/registry/registry/main.py ~/x402-agents/registry/registry/analytics.py 2>/dev/null || true
             rmdir ~/x402-agents/registry/registry 2>/dev/null || true
             echo "Deployed main.py: $(ls -l ~/x402-agents/registry/main.py)"
-            pm2 restart beacon-registry
+            # Persist the admin secret into the process env so analytics auth
+            # survives restarts (a bare `pm2 restart` had been dropping it -> 401).
+            export ADMIN_SECRET_PASSWORD="${ADMIN_SECRET_PASSWORD}"
+            pm2 restart beacon-registry --update-env
             # Wait (up to ~40s) for the app to rebind port 8000 after restart.
             BODY=""
             for i in $(seq 1 20); do
