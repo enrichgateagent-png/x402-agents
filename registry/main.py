@@ -1145,45 +1145,36 @@ def manifest_validate(req: ManifestValidateRequest) -> dict:
     return {"ok": not errors, "valid": not errors, "version": _MANIFEST_VERSION, "errors": errors}
 
 
-@app.post("/api/v1/manifest/ingest")
-def manifest_ingest(req: ManifestIngestRequest, background_tasks: BackgroundTasks) -> dict:
-    """Fetch a manifest from a controlled location, validate it, and register the
-    agent as a verified, self-declared entry. Location is the proof of ownership:
-      - <domain>/.well-known/beacon.json  -> domain verified
-      - a repo's raw beacon.json          -> repo verified
-    """
-    _ensure_ready()
-    from urllib.parse import urlparse
-
-    url = req.url.strip()
-    parsed = urlparse(url)
-    if parsed.scheme not in ("https", "http"):
-        raise HTTPException(status_code=400, detail="url must be http(s)")
-
+def _fetch_manifest(url: str) -> Optional[dict]:
+    """GET a manifest URL (cheap, no GitHub API). Returns parsed JSON or None."""
     try:
         import urllib.request
-        with urllib.request.urlopen(url, timeout=10) as resp:  # noqa: S310 (reference impl)
+        with urllib.request.urlopen(url, timeout=8) as resp:  # noqa: S310 (reference impl)
             raw = resp.read(256 * 1024)  # 256KB cap
-        manifest = json.loads(raw.decode("utf-8"))
-    except Exception as exc:
-        raise HTTPException(status_code=400, detail=f"could not fetch/parse manifest: {exc}")
+        return json.loads(raw.decode("utf-8"))
+    except Exception:
+        return None
 
+
+def _verified_via(url: str) -> dict:
+    """Derive the location-based verification descriptor from a manifest URL."""
+    from urllib.parse import urlparse
+    parsed = urlparse(url)
+    host, path = parsed.netloc.lower(), parsed.path.lower()
+    if path.endswith("/.well-known/beacon.json"):
+        return {"method": "domain", "domain": host}
+    if host == "raw.githubusercontent.com":
+        parts = [p for p in parsed.path.split("/") if p]
+        return {"method": "repo", "repo": "/".join(parts[:2]) if len(parts) >= 2 else host}
+    return {"method": "location", "host": host}
+
+
+def _ingest_manifest(manifest: dict, url: str, background_tasks: BackgroundTasks) -> dict:
+    """Validate + register a fetched manifest as a verified, self-declared entry.
+    Raises HTTPException on invalid input (used by the public endpoint)."""
     errors = _validate_manifest(manifest)
     if errors:
         raise HTTPException(status_code=422, detail={"message": "invalid manifest", "errors": errors})
-
-    # Location-based verification.
-    host = parsed.netloc.lower()
-    path = parsed.path.lower()
-    if path.endswith("/.well-known/beacon.json"):
-        verified_via = {"method": "domain", "domain": host}
-    elif host == "raw.githubusercontent.com":
-        parts = [p for p in parsed.path.split("/") if p]
-        repo = "/".join(parts[:2]) if len(parts) >= 2 else host
-        verified_via = {"method": "repo", "repo": repo}
-    else:
-        verified_via = {"method": "location", "host": host}
-
     endpoint = _manifest_endpoint(manifest)
     if not endpoint:
         raise HTTPException(status_code=422, detail="manifest has no reachable interface endpoint or source")
@@ -1196,10 +1187,69 @@ def manifest_ingest(req: ManifestIngestRequest, background_tasks: BackgroundTask
         source="manifest",
     )
     result = register(reg, background_tasks)
-    result["verified"] = True
-    result["verified_via"] = verified_via
-    result["manifest_version"] = _MANIFEST_VERSION
+    result.update(verified=True, verified_via=_verified_via(url), manifest_version=_MANIFEST_VERSION)
     return result
+
+
+@app.post("/api/v1/manifest/ingest")
+def manifest_ingest(req: ManifestIngestRequest, background_tasks: BackgroundTasks) -> dict:
+    """Fetch a manifest from a controlled location, validate it, and register the
+    agent as a verified, self-declared entry. Location is the proof of ownership:
+      - <domain>/.well-known/beacon.json  -> domain verified
+      - a repo's raw beacon.json          -> repo verified
+    """
+    _ensure_ready()
+    url = req.url.strip()
+    if not url.lower().startswith(("http://", "https://")):
+        raise HTTPException(status_code=400, detail="url must be http(s)")
+    manifest = _fetch_manifest(url)
+    if manifest is None:
+        raise HTTPException(status_code=400, detail="could not fetch/parse manifest at url")
+    return _ingest_manifest(manifest, url, background_tasks)
+
+
+def _raw_manifest_urls(mcp_endpoint: str) -> list[str]:
+    """Candidate beacon.json URLs for a github repo endpoint (main, then master)."""
+    import re as _re
+    m = _re.search(r"github\.com/([^/]+)/([^/#?]+)", mcp_endpoint or "")
+    if not m:
+        return []
+    owner, repo = m.group(1), m.group(2).removesuffix(".git")
+    return [f"https://raw.githubusercontent.com/{owner}/{repo}/{b}/beacon.json" for b in ("main", "master")]
+
+
+@app.post("/api/admin/manifest-scan")
+def manifest_scan(request: Request, background_tasks: BackgroundTasks,
+                  limit: int = 200, offset: int = 0) -> dict:
+    """Auto-adopt: walk indexed github repos and upgrade any that publish a
+    beacon.json to a verified, self-declared entry. Idempotent; cron a rolling
+    offset to sweep the whole index. Admin-guarded (cheap raw GETs, no GH API)."""
+    analytics.verify_admin(request)
+    _ensure_ready()
+    limit = max(1, min(limit, 1000))
+    rows = turso.execute(
+        "SELECT agent_id, mcp_endpoint FROM agents "
+        "WHERE mcp_endpoint LIKE '%github.com%' AND registration_source != 'manifest' "
+        "ORDER BY agent_id LIMIT ? OFFSET ?",
+        [limit, offset],
+    )
+    checked = upgraded = 0
+    found: list[str] = []
+    for r in rows:
+        checked += 1
+        for url in _raw_manifest_urls(r["mcp_endpoint"]):
+            manifest = _fetch_manifest(url)
+            if manifest is None:
+                continue
+            try:
+                _ingest_manifest(manifest, url, background_tasks)
+                upgraded += 1
+                found.append(r["agent_id"])
+            except HTTPException:
+                pass  # present but invalid — skip, don't fail the sweep
+            break  # stop at first branch that returned a file
+    return {"ok": True, "checked": checked, "upgraded": upgraded,
+            "found": found, "next_offset": offset + limit}
 
 
 # Lightweight semantic map: each concept -> related capability tokens. Used only
