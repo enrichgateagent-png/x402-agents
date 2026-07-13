@@ -63,7 +63,10 @@ ${organicLine}
 ## Primary Integration Endpoints for LLMs (free, keyless)
 - POST ${REGISTRY}/api/v1/discover : Capability search. Body: {"query": "web scraping", "limit": 10}. Answers "find an agent that does X".
 - GET ${REGISTRY}/api/v1/search?q=<query>&limit=10 : Same capability search via GET (FTS, cacheable).
-- GET ${REGISTRY}/api/v1/leaderboard : Ranked by reputation + GitHub stars (add ?sort=health for maintenance-weighted ranking).
+- GET ${REGISTRY}/api/v1/leaderboard : Ranked by stars (default). ?sort=usage for telemetry jobs, ?sort=proven for jobs+selections, ?sort=health for maintenance.
+- GET ${REGISTRY}/api/v1/growth/proven : Top agents by real usage (telemetry + portal wires).
+- POST ${REGISTRY}/api/v1/telemetry : Report job success/fail — boosts discover ranking and README badge.
+- POST ${REGISTRY}/api/v1/usage/select : Record when you wire an agent — credits proven score.
 - GET ${REGISTRY}/api/v1/agents?sort=recent : Newest indexed agents.
 - GET ${REGISTRY}/api/v1/agents?sort=health : Ranked by push freshness + stars + issue load.
 - GET ${REGISTRY}/api/v1/agents/{owner}/{repo}/badge.svg : Live SVG status/verification badge.
@@ -81,6 +84,11 @@ ${PORTAL}
 - Manifest spec: https://github.com/enrichgateagent-png/beacon-agent-manifest
 - Draft beacon.json: GET ${REGISTRY}/api/v1/agents/{owner}/{repo}/beacon.json
 - For agents: ${PORTAL}/for-agents.html
+
+## Benefits for agents that use Beacon
+- POST /api/v1/telemetry after each job → higher discover/search rank + live README badge (job count + success %).
+- GET /api/v1/growth/proven → agents with real usage surface in "Proven" leaderboard.
+- Orchestrators can POST /api/v1/usage/select when they pick you → proven score even without SDK telemetry.
 `;
 }
 

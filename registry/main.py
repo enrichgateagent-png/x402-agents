@@ -33,6 +33,7 @@ import analytics
 import seo
 import trending
 import turso
+import usage
 
 import logging
 
@@ -101,6 +102,7 @@ def _ensure_ready() -> None:
         turso.ensure_schema()
         analytics.ensure_analytics_schema()
         trending.ensure_trending_schema()
+        usage.ensure_usage_schema()
         _schema_ready = True
 
 
@@ -324,7 +326,9 @@ def _freshness_tier_sql(col: str = "pushed_at") -> str:
 #   top      — proven builders first: stars lead (the homepage "Top" tab)
 #   healthy  — maintenance composite: fresh + starred, demotes the abandoned
 #   new      — most recently pushed first: "what shipped this week"
-_SORT_MODES = {"relevance", "top", "healthy", "new"}
+#   usage    — most telemetry jobs reported (real production use)
+#   proven   — composite: telemetry jobs + weighted portal/MCP selections
+_SORT_MODES = {"relevance", "top", "healthy", "new", "usage", "proven"}
 
 
 def _order_by_sql(sort: str, alias: str, has_rank: bool) -> str:
@@ -337,9 +341,18 @@ def _order_by_sql(sort: str, alias: str, has_rank: bool) -> str:
         return f"{a}pushed_at DESC, {a}stars DESC"
     if sort == "healthy":
         return f"{tier} DESC, {a}stars DESC, {a}success_rate DESC"
-    # relevance: freshness tier, then keyword rank (FTS only), then popularity
+    if sort == "usage":
+        return f"{a}total_transactions DESC, {a}success_rate DESC, {a}stars DESC"
+    if sort == "proven":
+        # Used only with JOIN agent_usage in leaderboard; alias must match query.
+        u = "u." if alias else ""
+        return (
+            f"({a}total_transactions + COALESCE({u}selections, 0) * {usage.SELECTION_WEIGHT}) DESC, "
+            f"{a}success_rate DESC, {a}stars DESC"
+        )
+    # relevance: freshness tier, then proven usage, then keyword rank, then popularity
     rank_part = "rank, " if has_rank else ""
-    return f"{tier} DESC, {rank_part}{a}stars DESC, {a}success_rate DESC"
+    return f"{tier} DESC, {a}total_transactions DESC, {rank_part}{a}stars DESC, {a}success_rate DESC"
 
 
 def _search_agents_core(
@@ -490,9 +503,15 @@ def _agent_schema() -> dict:
 
 def _agent_detail(row: dict) -> dict:
     pub = _row_to_public(row)
+    sel_rows = turso.execute(
+        "SELECT selections FROM agent_usage WHERE agent_id = ?", [pub["agent_id"]]
+    )
+    selections = int(sel_rows[0]["selections"] or 0) if sel_rows else 0
+    pub = usage.enrich_public(pub, selections)
     return {
         "ok": True,
         "agent": pub,
+        "usage_benefits": usage.agent_benefits(pub, selections),
         "install": _agent_install_manifest(pub["agent_id"], pub),
         "beacon_json": f"{PUBLIC_BASE_URL}/api/v1/agents/{quote(pub['agent_id'], safe='')}/beacon.json",
         "schema": _agent_schema(),
@@ -655,6 +674,11 @@ class TelemetryRequest(BaseModel):
         raise ValueError("status must be success, fail, or fraud")
 
 
+class UsageSelectRequest(BaseModel):
+    agent_id: str = Field(..., min_length=1, max_length=256)
+    source: str = Field("portal", max_length=32)
+
+
 # --------------------------------------------------------------------------- #
 # App
 # --------------------------------------------------------------------------- #
@@ -735,6 +759,8 @@ def root() -> dict:
             "POST /api/v1/register",
             "POST /api/v1/discover",
             "POST /api/v1/telemetry",
+            "POST /api/v1/usage/select",
+            "GET  /api/v1/growth/proven",
             "GET  /api/v1/agents",
             "GET  /healthz",
         ],
@@ -778,7 +804,10 @@ An open-source, programmatically indexed directory tracking {total:,}+ active au
 ## Primary Integration Endpoints for LLMs (free, keyless)
 - GET {PUBLIC_BASE_URL}/api/v1/search?q=<query>&limit=10 : Fastest path — FTS GET, cacheable, sub-second.
 - POST {PUBLIC_BASE_URL}/api/v1/discover : Capability search. Body: {{"query": "web scraping", "limit": 10}}. Answers "find an agent that does X".
-- GET {PUBLIC_BASE_URL}/api/v1/leaderboard : Ranked by reputation + GitHub stars (add ?sort=health for maintenance-weighted ranking).
+- GET {PUBLIC_BASE_URL}/api/v1/leaderboard : Ranked by stars (default). ?sort=usage for telemetry jobs, ?sort=proven for jobs+selections, ?sort=health for maintenance.
+- GET {PUBLIC_BASE_URL}/api/v1/growth/proven : Top agents by real usage (telemetry + portal wires).
+- POST {PUBLIC_BASE_URL}/api/v1/telemetry : Report job success/fail — boosts discover ranking and README badge.
+- POST {PUBLIC_BASE_URL}/api/v1/usage/select : Record when you wire an agent (orchestrators) — credits proven score.
 - GET {PUBLIC_BASE_URL}/api/v1/agents?sort=recent : Newest indexed agents.
 - GET {PUBLIC_BASE_URL}/api/v1/agents?sort=health : Ranked by push freshness + stars + issue load.
 - GET {PUBLIC_BASE_URL}/api/v1/agents/{{owner}}/{{repo}}/badge.svg : Live SVG status/verification badge.
@@ -1179,6 +1208,11 @@ def register(req: RegisterRequest, background_tasks: BackgroundTasks) -> dict:
         "agent": _row_to_public(row),
         "badge_url": badge_url,
         "badge_markdown": badge_markdown,
+        "usage_benefits": usage.agent_benefits(_row_to_public(row)),
+        "onboarding": {
+            "telemetry": f"POST {PUBLIC_BASE_URL}/api/v1/telemetry",
+            "benefit": "Each job you report boosts discover ranking and climbs the Proven leaderboard.",
+        },
     }
 
 
@@ -1534,7 +1568,17 @@ def telemetry(req: TelemetryRequest) -> dict:
         [s, t, f, f, f, reason, s, t, f, now, req.agent_id],
     )
     row = turso.execute("SELECT * FROM agents WHERE agent_id = ?", [req.agent_id])[0]
-    return {"ok": True, "recorded": req.status, "agent": _row_to_public(row)}
+    pub = _row_to_public(row)
+    sel_rows = turso.execute(
+        "SELECT selections FROM agent_usage WHERE agent_id = ?", [req.agent_id]
+    )
+    selections = int(sel_rows[0]["selections"] or 0) if sel_rows else 0
+    return {
+        "ok": True,
+        "recorded": req.status,
+        "agent": usage.enrich_public(pub, selections),
+        "usage_benefits": usage.agent_benefits(pub, selections),
+    }
 
 
 def _badge_char_width(s: str) -> int:
@@ -1595,7 +1639,8 @@ def agent_badge(agent_id: str) -> Response:
     """
     _ensure_ready()
     rows = turso.execute(
-        "SELECT success_rate, is_fraudulent FROM agents WHERE agent_id = ?", [agent_id]
+        "SELECT success_rate, is_fraudulent, total_transactions FROM agents WHERE agent_id = ?",
+        [agent_id],
     )
     if not rows:
         label, message, color = "Beacon", "Unknown", "#9f9f9f"
@@ -1603,7 +1648,13 @@ def agent_badge(agent_id: str) -> Response:
         label, message, color = "Beacon", "Flagged Threat", "#a01212"
     else:
         pct = round(float(rows[0]["success_rate"]) * 100)
-        label, message, color = "Beacon Verified", f"{pct}% Success", "#2ea043"
+        jobs = int(rows[0].get("total_transactions") or 0)
+        if jobs >= 10:
+            label, message, color = "Beacon Proven", f"{jobs:,} jobs · {pct}%", "#2ea043"
+        elif jobs > 0:
+            label, message, color = "Beacon Active", f"{jobs:,} jobs · {pct}%", "#1f6feb"
+        else:
+            label, message, color = "Beacon Verified", f"{pct}% Success", "#2ea043"
 
     svg = _render_badge(label, message, color)
     return Response(
@@ -1626,6 +1677,37 @@ def growth_trending(limit: int = 20) -> dict:
     """
     _ensure_ready()
     return trending.get_trending_feed(limit, _row_to_public, _pushed_recently)
+
+
+@app.get("/api/v1/growth/proven")
+def growth_proven(limit: int = 20, offset: int = 0) -> dict:
+    """
+    Top agents by real usage — telemetry jobs plus weighted portal/MCP selections.
+    Agents with proven scores rank higher in discover/search tie-breakers.
+    """
+    _ensure_ready()
+    live_args: list = [_DEAD_AFTER]
+    return usage.get_proven_feed(limit, offset, _row_to_public, _LIVE_CLAUSE, live_args)
+
+
+@app.get("/api/v1/growth/usage-stats")
+def growth_usage_stats() -> dict:
+    """Public-safe aggregate: how many agents report telemetry vs get wired."""
+    _ensure_ready()
+    return {"ok": True, **usage.platform_usage_summary()}
+
+
+@app.post("/api/v1/usage/select")
+def usage_select(req: UsageSelectRequest) -> dict:
+    """
+    Record that an agent was selected (portal wire, MCP pick, orchestrator hook).
+    Increments proven score so listed agents benefit even before running the SDK.
+    """
+    _ensure_ready()
+    out = usage.record_selection(req.agent_id, (req.source or "portal").strip().lower())
+    if not out.get("ok"):
+        raise HTTPException(status_code=404, detail=out.get("error", "not found"))
+    return out
 
 
 @app.get("/api/v1/radar")
@@ -1690,10 +1772,10 @@ def leaderboard(
     include_inactive: bool = False,
 ) -> dict:
     """
-    Public leaderboard powering the homepage Top / Healthy / New tabs.
-    sort: top (stars-led, default) | healthy (maintenance composite) | new
-          (freshest). Dead repos (not pushed in 2+ years) are hidden unless
-          include_inactive=true. Returns a flat array + total_count.
+    Public leaderboard powering the homepage Top / Healthy / New / Proven tabs.
+    sort: top (stars-led, default) | healthy | new | usage (telemetry jobs)
+          | proven (jobs + weighted selections). Dead repos (not pushed in 2+
+          years) are hidden unless include_inactive=true.
     """
     _ensure_ready()
     limit = max(1, min(limit, 500))
@@ -1707,6 +1789,7 @@ def leaderboard(
         "organic_sdk_registrations": organic_sdk,
         "scraped_registrations": scraped,
         "by_source": by_source,
+        **usage.platform_usage_summary(),
     }
 
     board_args: list = []
@@ -1714,15 +1797,40 @@ def leaderboard(
     if not include_inactive:
         live_clause = _LIVE_CLAUSE
         board_args.append(_DEAD_AFTER)
-    board_args.extend([limit, offset])
-    rows = turso.execute(
-        f"SELECT * FROM agents "
-        f"WHERE is_fraudulent = 0 {live_clause} "
-        f"ORDER BY {_order_by_sql(sort, '', has_rank=False)} "
-        f"LIMIT ? OFFSET ?",
-        board_args,
-    )
-    board = [_row_to_public(r) for r in rows]
+
+    usage_filter = ""
+    if sort == "usage":
+        usage_filter = " AND total_transactions > 0"
+
+    if sort == "proven":
+        proven_args = list(board_args)
+        proven_args.extend([limit, offset])
+        rows = turso.execute(
+            f"""
+            SELECT a.*, COALESCE(u.selections, 0) AS selection_count
+            FROM agents a
+            LEFT JOIN agent_usage u ON u.agent_id = a.agent_id
+            WHERE a.is_fraudulent = 0 {live_clause.replace('pushed_at', 'a.pushed_at')}
+              AND (a.total_transactions > 0 OR COALESCE(u.selections, 0) > 0)
+            ORDER BY {_order_by_sql(sort, 'a.', has_rank=False)}
+            LIMIT ? OFFSET ?
+            """,
+            proven_args,
+        )
+        board = [
+            usage.enrich_public(_row_to_public(r), int(r.get("selection_count") or 0))
+            for r in rows
+        ]
+    else:
+        board_args.extend([limit, offset])
+        rows = turso.execute(
+            f"SELECT * FROM agents "
+            f"WHERE is_fraudulent = 0 {live_clause}{usage_filter} "
+            f"ORDER BY {_order_by_sql(sort, '', has_rank=False)} "
+            f"LIMIT ? OFFSET ?",
+            board_args,
+        )
+        board = [_row_to_public(r) for r in rows]
     if online_only:
         board = [a for a in board if a["online"]]
 
@@ -1768,6 +1876,24 @@ def list_agents(limit: int = 100, online_only: bool = False, sort: str = "top") 
         if online_only:
             agents = [a for a in agents if a["online"]]
         return {"ok": True, "count": min(len(agents), limit), "sort": "health", "agents": agents[:limit]}
+
+    if sort == "usage":
+        rows = turso.execute(
+            "SELECT * FROM agents WHERE is_fraudulent = 0 AND total_transactions > 0 "
+            "ORDER BY total_transactions DESC, success_rate DESC, stars DESC LIMIT ?",
+            [limit],
+        )
+        agents = [_row_to_public(r) for r in rows]
+        if online_only:
+            agents = [a for a in agents if a["online"]]
+        return {"ok": True, "count": len(agents), "sort": "usage", "agents": agents}
+
+    if sort == "proven":
+        feed = usage.get_proven_feed(limit, 0, _row_to_public, "", [])
+        agents = feed.get("agents") or []
+        if online_only:
+            agents = [a for a in agents if a["online"]]
+        return {"ok": True, "count": len(agents), "sort": "proven", "agents": agents}
 
     order = (
         "created_at DESC"

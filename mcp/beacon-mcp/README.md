@@ -17,19 +17,29 @@ No API key. No payment. Just discovery.
 | `top_agents` | Most-starred / highest-reputation agents in the index |
 | `agent_details` | Full detail for one agent by id (e.g. `elizaOS/eliza`) |
 
-## Install
+## Install (one command)
 
-**Claude Desktop / Cline / Windsurf** — add to your MCP config:
+```bash
+npx beacon-mcp init
+```
+
+Writes Beacon into `~/.cursor/mcp.json`, project `.cursor/mcp.json`, and Claude Desktop config. Restart your editor.
+
+**Manual** — add to MCP config:
 
 ```json
 {
   "mcpServers": {
-    "beacon": { "command": "npx", "args": ["-y", "beacon-mcp"] }
+    "beacon": {
+      "command": "npx",
+      "args": ["-y", "beacon-mcp"],
+      "env": { "BEACON_REGISTRY_URL": "https://registry-ruby.vercel.app" }
+    }
   }
 }
 ```
 
-**Cursor** — Settings → MCP → add a stdio server: `npx -y beacon-mcp`.
+**Cursor** — Settings → MCP → add stdio server: `npx -y beacon-mcp`.
 
 That's it. Ask your agent: *"Use beacon to find an agent that scrapes websites."*
 

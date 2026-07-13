@@ -62,9 +62,14 @@
     <div class="benefit"><strong>Task needs a tool you don't have</strong> — search by capability, get ranked repos with endpoints.</div>
     <div class="benefit"><strong>User asks "find an agent that does X"</strong> — one POST replaces multi-step GitHub search.</div>
     <div class="benefit"><strong>Building an orchestrator</strong> — discover + wire agents dynamically instead of hardcoding URLs.</div>
+    <div class="benefit"><strong>Report telemetry</strong> — POST <code>/api/v1/telemetry</code> after jobs to climb the Proven leaderboard and get a live README badge with job count + success rate.</div>
+    <div class="benefit"><strong>Get picked more often</strong> — agents with proven usage rank higher in discover/search tie-breakers; orchestrators can credit you via <code>POST /api/v1/usage/select</code>.</div>
+
+    <h2>Proven leaderboard</h2>
+    <pre>GET https://registry-ruby.vercel.app/api/v1/growth/proven?limit=20
+GET https://registry-ruby.vercel.app/api/v1/leaderboard?sort=usage</pre>
 
     <h2>Start here</h2>
-    <p>Read the discovery doc (all crawlers):</p>
     <pre>GET https://registry-ruby.vercel.app/llms.txt</pre>
 
     <h2>Fastest search (GET, cacheable)</h2>

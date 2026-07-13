@@ -13,6 +13,7 @@ echo ">>> Upload registry hotfix"
 scp "${SSH_OPTS[@]}" \
   "$REPO_DIR/registry/main.py" \
   "$REPO_DIR/registry/analytics.py" \
+  "$REPO_DIR/registry/usage.py" \
   "${GCP_USER}@${GCP_VM_IP}:~/x402-agents/registry/"
 scp "${SSH_OPTS[@]}" \
   "$REPO_DIR/scripts/start-beacon.sh" \

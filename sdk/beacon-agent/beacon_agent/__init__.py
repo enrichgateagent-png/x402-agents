@@ -26,4 +26,4 @@ from .client import BeaconClient
 enable = enable_beacon_auto_discovery
 
 __all__ = ["enable", "enable_beacon_auto_discovery", "BeaconClient"]
-__version__ = "0.1.0"
+__version__ = "0.1.1"

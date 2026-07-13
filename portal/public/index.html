@@ -146,6 +146,11 @@
               Search by capability, wire into Cursor via MCP, or let your AI agent call our free API.
               <a href="/for-agents.html" class="text-pulse-cyan hover:underline">For autonomous agents →</a>
             </p>
+            <div class="mt-5 rounded-xl border border-pulse-cyan/25 bg-pulse-cyan/5 p-4">
+              <p class="text-xs font-medium text-white">Add Beacon to Cursor in one command</p>
+              <code id="initCmd" class="mt-2 block rounded-lg bg-void/80 p-3 font-mono text-[11px] text-pulse-cyan">npx beacon-mcp init</code>
+              <button id="copyInitCmd" type="button" class="mt-2 rounded-lg bg-pulse-cyan/15 px-4 py-2 text-xs font-medium text-pulse-cyan ring-1 ring-pulse-cyan/30 hover:bg-pulse-cyan/25 transition">Copy install command</button>
+            </div>
           </div>
 
           <!-- Ecosystem filters -->
@@ -164,6 +169,8 @@
             <div class="flex flex-wrap gap-1 rounded-lg border border-void-line bg-void-card p-1 text-xs" id="browseFilters">
               <button data-mode="search" class="mode-btn hidden rounded-md px-3 py-1.5 font-medium text-pulse-cyan bg-pulse-cyan/10">Matches</button>
               <button data-mode="top" class="mode-btn rounded-md px-3 py-1.5 text-slate-400 hover:text-white">Top</button>
+              <button data-mode="proven" class="mode-btn rounded-md px-3 py-1.5 text-slate-400 hover:text-white">Proven</button>
+              <button data-mode="usage" class="mode-btn rounded-md px-3 py-1.5 text-slate-400 hover:text-white">By usage</button>
               <button data-mode="health" class="mode-btn rounded-md px-3 py-1.5 text-slate-400 hover:text-white">Healthy</button>
               <button data-mode="recent" class="mode-btn rounded-md px-3 py-1.5 text-slate-400 hover:text-white">New</button>
             </div>
@@ -203,12 +210,23 @@
           <div id="adoptersStrip" class="flex gap-3 overflow-x-auto pb-1 snap-x snap-mandatory"></div>
         </section>
 
+        <!-- Proven by real usage -->
+        <section id="provenSection" class="mb-6 hidden">
+          <div class="mb-3 flex items-center justify-between gap-2">
+            <h2 class="text-sm font-semibold text-white">Proven by usage</h2>
+            <span class="text-xs text-slate-500">Telemetry jobs + portal wires</span>
+          </div>
+          <div id="provenStrip" class="flex gap-3 overflow-x-auto pb-1 snap-x snap-mandatory"></div>
+        </section>
+
         <!-- Filter bar (sticky context when browsing results) -->
         <div id="resultsToolbar" class="mb-4 hidden flex-wrap items-center justify-between gap-3">
           <div id="resultMeta" class="text-sm text-slate-500">Search or browse the index</div>
           <div class="flex gap-1 rounded-lg border border-void-line bg-void-card p-1 text-xs" id="browseFiltersResults">
             <button data-mode="search" class="mode-btn hidden rounded-md px-3 py-1.5 font-medium text-pulse-cyan bg-pulse-cyan/10">Matches</button>
             <button data-mode="top" class="mode-btn rounded-md px-3 py-1.5 text-slate-400 hover:text-white">Top</button>
+            <button data-mode="proven" class="mode-btn rounded-md px-3 py-1.5 text-slate-400 hover:text-white">Proven</button>
+            <button data-mode="usage" class="mode-btn rounded-md px-3 py-1.5 text-slate-400 hover:text-white">By usage</button>
             <button data-mode="health" class="mode-btn rounded-md px-3 py-1.5 text-slate-400 hover:text-white">Healthy</button>
             <button data-mode="recent" class="mode-btn rounded-md px-3 py-1.5 text-slate-400 hover:text-white">New</button>
           </div>
@@ -298,9 +316,9 @@
         <!-- Quick wire from editor -->
         <div id="integrate" class="mt-4 rounded-2xl border border-void-line bg-void-card p-4">
           <p class="text-xs font-medium text-white">Connect via MCP</p>
-          <p class="mt-1 text-[11px] text-slate-500">Run the Beacon MCP server locally in your editor:</p>
-          <code class="mt-3 block rounded-lg bg-void/80 p-3 font-mono text-[10px] leading-relaxed text-pulse-cyan break-all">BEACON_REGISTRY_URL=https://registry-ruby.vercel.app npx -y beacon-mcp</code>
-          <button id="copyEditorMcp" class="mt-2 w-full rounded-lg border border-void-line py-2 text-xs text-slate-400 hover:text-white transition">Copy command</button>
+          <p class="mt-1 text-[11px] text-slate-500">One command configures Cursor + Claude Desktop:</p>
+          <code class="mt-3 block rounded-lg bg-void/80 p-3 font-mono text-[10px] leading-relaxed text-pulse-cyan break-all">npx beacon-mcp init</code>
+          <button id="copyEditorMcp" class="mt-2 w-full rounded-lg border border-void-line py-2 text-xs text-slate-400 hover:text-white transition">Copy init command</button>
         </div>
       </aside>
     </div>
@@ -330,6 +348,7 @@
     const $ = (id) => document.getElementById(id);
     const esc = (s) => String(s ?? "").replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
     const fmtStars = (n) => { n = Number(n) || 0; return n >= 1e6 ? (n / 1e6).toFixed(1) + "M" : n >= 1000 ? (n / 1000).toFixed(n >= 1e4 ? 0 : 1).replace(/\.0$/, "") + "k" : String(n); };
+    const fmtJobs = (n) => { n = Number(n) || 0; if (!n) return ""; return n >= 1e6 ? (n / 1e6).toFixed(1) + "M jobs" : n >= 1000 ? (n / 1000).toFixed(n >= 1e4 ? 0 : 1).replace(/\.0$/, "") + "k jobs" : `${n} jobs`; };
 
     const ECOSYSTEMS = [
       { q: "mcp server", label: "MCP" },
@@ -463,6 +482,30 @@
       } catch {}
     }
 
+    function provenCard(a) {
+      const jobs = a.total_transactions ? fmtJobs(a.total_transactions) : "";
+      const score = a.proven_score ?? a.usage?.proven_score ?? 0;
+      return `
+        <button type="button" class="trend-card trend-pick shrink-0 rounded-xl border border-emerald-500/20 bg-void-card p-3 text-left transition hover:border-emerald-400/40" data-agent='${esc(JSON.stringify(a))}'>
+          <div class="truncate text-sm font-medium text-white">${esc(a.name)}</div>
+          <div class="mt-1 truncate font-mono text-[10px] text-slate-500">${esc(a.agent_id)}</div>
+          <div class="mt-2 flex flex-wrap items-center gap-2 text-[10px] text-emerald-400/90">
+            ${score ? `<span>score ${score}</span>` : ""}
+            ${jobs ? `<span>${jobs}</span>` : ""}
+            ${a.success_rate != null ? `<span>${Math.round(a.success_rate * 100)}% ok</span>` : ""}
+          </div>
+        </button>`;
+    }
+
+    async function loadProven() {
+      try {
+        const d = await apiGet("/api/v1/growth/proven?limit=10");
+        if (!d.ok || !(d.agents || []).length) return;
+        $("provenSection").classList.remove("hidden");
+        $("provenStrip").innerHTML = d.agents.map(provenCard).join("");
+      } catch {}
+    }
+
     function toast(msg) {
       const t = $("toast");
       t.querySelector("div").textContent = msg;
@@ -506,6 +549,11 @@
       saveDock();
       inspect(a);
       toast(`Wired ${a.name}`);
+      fetch(`${API}/api/v1/usage/select`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ agent_id: a.agent_id, source: "portal" }),
+      }).catch(() => {});
     }
 
     function removeFromDock(id) {
@@ -551,10 +599,14 @@
 
       const health = a.health_score ?? 0;
       const rate = a.success_rate != null ? `${Math.round(a.success_rate * 100)}%` : "—";
+      const jobs = a.total_transactions ? fmtJobs(a.total_transactions) : "—";
+      const proven = a.proven_score ?? a.usage?.proven_score;
       $("inspMeta").innerHTML = `
         <div class="rounded-lg bg-void/60 p-2"><div class="text-slate-500">Health</div><div class="font-medium text-pulse-cyan">${health || "—"}</div></div>
         <div class="rounded-lg bg-void/60 p-2"><div class="text-slate-500">Stars</div><div class="font-medium">${a.stars ? fmtStars(a.stars) : "—"}</div></div>
+        <div class="rounded-lg bg-void/60 p-2"><div class="text-slate-500">Jobs</div><div class="font-medium text-pulse-violet">${jobs}</div></div>
         <div class="rounded-lg bg-void/60 p-2"><div class="text-slate-500">Success</div><div class="font-medium">${rate}</div></div>
+        <div class="rounded-lg bg-void/60 p-2"><div class="text-slate-500">Proven</div><div class="font-medium">${proven ? proven : "—"}</div></div>
         <div class="rounded-lg bg-void/60 p-2"><div class="text-slate-500">Status</div><div class="font-medium ${a.active ? "text-emerald-400" : "text-slate-500"}">${a.active ? "Active" : "Dormant"}</div></div>
       `;
       $("btnViewSource").href = a.endpoint || a.mcp_endpoint || "#";
@@ -597,6 +649,8 @@
               <p class="mt-2 text-sm text-slate-400 clamp2">${tags.length ? esc(tags.join(" · ")) : "No capability tags"}</p>
               <div class="mt-2 flex flex-wrap items-center gap-x-3 gap-y-1 text-[11px] text-slate-500">
                 ${a.stars ? `<span>★ ${fmtStars(a.stars)}</span>` : ""}
+                ${a.total_transactions ? `<span class="text-pulse-violet">${fmtJobs(a.total_transactions)}</span>` : ""}
+                ${(a.usage?.is_proven || (a.proven_score ?? 0) >= 10) ? '<span class="text-emerald-400/90">Proven</span>' : ""}
                 ${a.active ? '<span class="text-emerald-400/80">Maintained</span>' : '<span>Dormant</span>'}
                 ${a.registration_source === "sdk" ? '<span class="text-pulse-violet">SDK</span>' : ""}
                 ${a.pushed_at ? `<span>Pushed ${relTime(a.pushed_at)}</span>` : ""}
@@ -691,8 +745,10 @@
       const t0 = performance.now();
       try {
         let list = [];
-        if (browseMode === "top") {
-          const pg = await apiGet(`/api/v1/leaderboard?limit=${PAGE_SIZE}&offset=${page * PAGE_SIZE}`);
+        const leaderboardModes = { top: "top", proven: "proven", usage: "usage" };
+        if (leaderboardModes[browseMode]) {
+          const sort = leaderboardModes[browseMode];
+          const pg = await apiGet(`/api/v1/leaderboard?sort=${sort}&limit=${PAGE_SIZE}&offset=${page * PAGE_SIZE}`);
           list = pg.leaderboard || [];
           if (pg.total_count) totalCount = pg.total_count;
           renderPager();
@@ -702,7 +758,13 @@
           $("pager").classList.add("hidden");
         }
         const ms = ((performance.now() - t0) / 1000).toFixed(2);
-        const label = { top: "top agents", health: "healthiest agents", recent: "newest agents" }[browseMode];
+        const label = {
+          top: "top agents",
+          proven: "proven agents",
+          usage: "most-used agents",
+          health: "healthiest agents",
+          recent: "newest agents",
+        }[browseMode];
         renderResults(list, `${list.length} ${label} · ${totalCount.toLocaleString()} indexed · ${ms}s`);
         $("heroSection").classList.add("hidden");
       } catch {
@@ -828,6 +890,12 @@
       const a = parseAgentFromEl(e.target);
       if (a) inspect(a);
     });
+    $("provenStrip").addEventListener("click", (e) => {
+      const card = e.target.closest(".trend-pick");
+      if (!card) return;
+      const a = parseAgentFromEl(e.target);
+      if (a) inspect(a);
+    });
 
     $("dockList").addEventListener("click", (e) => {
       if (e.target.closest(".remove-dock")) { removeFromDock(e.target.closest(".remove-dock").dataset.id); return; }
@@ -850,8 +918,12 @@
     $("btnExportStack").addEventListener("click", exportStack);
     $("btnClearDock").addEventListener("click", () => { dock = []; saveDock(); hideInspector(); toast("Dock cleared"); });
     $("copyEditorMcp").addEventListener("click", () => {
-      navigator.clipboard?.writeText("BEACON_REGISTRY_URL=https://registry-ruby.vercel.app npx -y beacon-mcp");
-      toast("Command copied");
+      navigator.clipboard?.writeText("npx beacon-mcp init");
+      toast("Init command copied — run in terminal, then restart Cursor");
+    });
+    $("copyInitCmd")?.addEventListener("click", () => {
+      navigator.clipboard?.writeText("npx beacon-mcp init");
+      toast("Copied — run in terminal, then restart Cursor");
     });
 
     document.addEventListener("click", (e) => { if (e.target.classList.contains("suggest-q")) search(e.target.textContent); });
@@ -874,7 +946,7 @@
     loadDock();
     (async () => {
       await refreshRegistryCount();
-      await Promise.all([loadTrending(), loadAdopters()]);
+      await Promise.all([loadTrending(), loadAdopters(), loadProven()]);
       try {
         const params = new URLSearchParams(location.search);
         const qParam = (params.get("q") || "").trim();
