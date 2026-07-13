@@ -29,19 +29,29 @@ jobs:
           OWNER: ${{ github.event.inputs.owner }}
         run: |
           set -euo pipefail
-          LIMIT=1000
+          scan() {  # $1 = query string
+            RESP=$(curl -fsS -m 90 -X POST "${BASE}/api/admin/manifest-scan?$1" -H "x-admin-token: ${TOKEN}")
+            echo "$RESP"
+            echo "$RESP" | grep -q '"ok":true' || { echo "scan failed"; exit 1; }
+            echo "$RESP" | grep -o '"upgraded":[0-9]*' | grep -o '[0-9]*'
+          }
+
           if [ -n "${OWNER}" ]; then
+            # Primary adoption path: instant, targeted upgrade after outreach.
             echo "On-demand scan of org: ${OWNER}"
-            Q="owner=${OWNER}&limit=${LIMIT}"
-          else
-            # Stateless rolling window: 24 slots × 1000 = 24k, sweeps ~weekly at 6h.
-            OFFSET=$(( (${{ github.run_number }} % 24) * LIMIT ))
-            echo "Rolling sweep window: offset=${OFFSET} limit=${LIMIT}"
-            Q="limit=${LIMIT}&offset=${OFFSET}"
+            scan "owner=${OWNER}&limit=200"
+            exit 0
           fi
-          RESP=$(curl -fsS -m 120 -X POST "${BASE}/api/admin/manifest-scan?${Q}" \
-                   -H "x-admin-token: ${TOKEN}")
-          echo "$RESP"
-          echo "$RESP" | grep -q '"ok":true' || { echo "scan failed"; exit 1; }
-          UP=$(echo "$RESP" | grep -o '"upgraded":[0-9]*' | grep -o '[0-9]*')
-          echo "Upgraded ${UP} repo(s) to verified manifest entries."
+
+          # Background trickle only. GitHub rate-limits raw requests at volume, and
+          # ~all repos have no manifest, so we sweep in small safe batches. The real
+          # adoption paths are ?owner= (above) and self-serve POST /manifest/ingest.
+          BATCH=50; N=6
+          BASE_OFFSET=$(( (${{ github.run_number }} * BATCH * N) % 24000 ))
+          TOTAL=0
+          for i in $(seq 0 $((N-1))); do
+            OFF=$(( BASE_OFFSET + i * BATCH ))
+            UP=$(scan "limit=${BATCH}&offset=${OFF}")
+            TOTAL=$(( TOTAL + UP ))
+          done
+          echo "Rolling sweep upgraded ${TOTAL} repo(s) this run."
