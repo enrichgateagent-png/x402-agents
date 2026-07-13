@@ -1220,19 +1220,26 @@ def _raw_manifest_urls(mcp_endpoint: str) -> list[str]:
 
 @app.post("/api/admin/manifest-scan")
 def manifest_scan(request: Request, background_tasks: BackgroundTasks,
-                  limit: int = 200, offset: int = 0) -> dict:
+                  limit: int = 200, offset: int = 0, owner: Optional[str] = None) -> dict:
     """Auto-adopt: walk indexed github repos and upgrade any that publish a
     beacon.json to a verified, self-declared entry. Idempotent; cron a rolling
-    offset to sweep the whole index. Admin-guarded (cheap raw GETs, no GH API)."""
+    offset to sweep the whole index, or pass ?owner=<org> to scan one org on
+    demand (e.g. after outreach). Admin-guarded (cheap raw GETs, no GH API)."""
     if not analytics.verify_admin(request):
         raise HTTPException(status_code=401, detail="Unauthorized — set ADMIN_SECRET_PASSWORD on the VM")
     _ensure_ready()
     limit = max(1, min(limit, 1000))
+    owner = (owner or "").strip().lower() or None
+    where = "mcp_endpoint LIKE '%github.com%' AND registration_source != 'manifest'"
+    args: list = []
+    if owner:
+        where += " AND LOWER(agent_id) LIKE ?"
+        args.append(f"{owner}/%")
+    args.extend([limit, offset])
     rows = turso.execute(
-        "SELECT agent_id, mcp_endpoint FROM agents "
-        "WHERE mcp_endpoint LIKE '%github.com%' AND registration_source != 'manifest' "
+        f"SELECT agent_id, mcp_endpoint FROM agents WHERE {where} "
         "ORDER BY agent_id LIMIT ? OFFSET ?",
-        [limit, offset],
+        args,
     )
     checked = upgraded = 0
     found: list[str] = []
