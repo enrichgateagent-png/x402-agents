@@ -1,0 +1,882 @@
+[
+  {
+    "slug": "web-scraping",
+    "label": "web scraping"
+  },
+  {
+    "slug": "pdf-extraction",
+    "label": "pdf extraction"
+  },
+  {
+    "slug": "browser-automation",
+    "label": "browser automation"
+  },
+  {
+    "slug": "rag",
+    "label": "rag retrieval"
+  },
+  {
+    "slug": "trading-bot",
+    "label": "trading bot"
+  },
+  {
+    "slug": "code-review",
+    "label": "code review"
+  },
+  {
+    "slug": "data-analysis",
+    "label": "data analysis"
+  },
+  {
+    "slug": "image-generation",
+    "label": "image generation"
+  },
+  {
+    "slug": "voice-agent",
+    "label": "voice agent"
+  },
+  {
+    "slug": "sql-agent",
+    "label": "sql database agent"
+  },
+  {
+    "slug": "github-automation",
+    "label": "github automation"
+  },
+  {
+    "slug": "discord-bot",
+    "label": "discord bot"
+  },
+  {
+    "slug": "telegram-bot",
+    "label": "telegram bot"
+  },
+  {
+    "slug": "email-automation",
+    "label": "email automation"
+  },
+  {
+    "slug": "research-assistant",
+    "label": "research assistant"
+  },
+  {
+    "slug": "customer-support",
+    "label": "customer support"
+  },
+  {
+    "slug": "content-writing",
+    "label": "content writing"
+  },
+  {
+    "slug": "translation",
+    "label": "translation"
+  },
+  {
+    "slug": "ocr",
+    "label": "ocr document"
+  },
+  {
+    "slug": "knowledge-base",
+    "label": "knowledge base"
+  },
+  {
+    "slug": "vector-database",
+    "label": "vector database"
+  },
+  {
+    "slug": "workflow-automation",
+    "label": "workflow automation"
+  },
+  {
+    "slug": "api-integration",
+    "label": "api integration"
+  },
+  {
+    "slug": "testing",
+    "label": "test automation"
+  },
+  {
+    "slug": "security-audit",
+    "label": "security audit"
+  },
+  {
+    "slug": "blockchain",
+    "label": "blockchain agent"
+  },
+  {
+    "slug": "solana",
+    "label": "solana agent"
+  },
+  {
+    "slug": "defi",
+    "label": "defi trading"
+  },
+  {
+    "slug": "twitter-agent",
+    "label": "twitter social media"
+  },
+  {
+    "slug": "scheduling",
+    "label": "calendar scheduling"
+  },
+  {
+    "slug": "summarization",
+    "label": "summarization"
+  },
+  {
+    "slug": "web-search",
+    "label": "web search"
+  },
+  {
+    "slug": "multi-agent",
+    "label": "multi agent orchestration"
+  },
+  {
+    "slug": "finance",
+    "label": "finance analysis"
+  },
+  {
+    "slug": "chatbot",
+    "label": "chatbot"
+  },
+  {
+    "slug": "code-generation",
+    "label": "code generation"
+  },
+  {
+    "slug": "documentation",
+    "label": "documentation"
+  },
+  {
+    "slug": "transcription",
+    "label": "transcription"
+  },
+  {
+    "slug": "text-to-speech",
+    "label": "text to speech"
+  },
+  {
+    "slug": "speech-to-text",
+    "label": "speech to text"
+  },
+  {
+    "slug": "sentiment-analysis",
+    "label": "sentiment analysis"
+  },
+  {
+    "slug": "lead-generation",
+    "label": "lead generation"
+  },
+  {
+    "slug": "seo",
+    "label": "seo"
+  },
+  {
+    "slug": "copywriting",
+    "label": "copywriting"
+  },
+  {
+    "slug": "resume",
+    "label": "resume builder"
+  },
+  {
+    "slug": "recruiting",
+    "label": "recruiting"
+  },
+  {
+    "slug": "legal",
+    "label": "legal assistant"
+  },
+  {
+    "slug": "medical",
+    "label": "medical assistant"
+  },
+  {
+    "slug": "real-estate",
+    "label": "real estate"
+  },
+  {
+    "slug": "e-commerce",
+    "label": "ecommerce"
+  },
+  {
+    "slug": "invoice",
+    "label": "invoice processing"
+  },
+  {
+    "slug": "recommendation",
+    "label": "recommendation engine"
+  },
+  {
+    "slug": "forecasting",
+    "label": "forecasting"
+  },
+  {
+    "slug": "anomaly-detection",
+    "label": "anomaly detection"
+  },
+  {
+    "slug": "fraud-detection",
+    "label": "fraud detection"
+  },
+  {
+    "slug": "moderation",
+    "label": "content moderation"
+  },
+  {
+    "slug": "embeddings",
+    "label": "embeddings"
+  },
+  {
+    "slug": "fine-tuning",
+    "label": "fine tuning"
+  },
+  {
+    "slug": "prompt-engineering",
+    "label": "prompt engineering"
+  },
+  {
+    "slug": "evaluation",
+    "label": "llm evaluation"
+  },
+  {
+    "slug": "observability",
+    "label": "agent observability"
+  },
+  {
+    "slug": "guardrails",
+    "label": "guardrails"
+  },
+  {
+    "slug": "memory",
+    "label": "agent memory"
+  },
+  {
+    "slug": "semantic-search",
+    "label": "semantic search"
+  },
+  {
+    "slug": "knowledge-graph",
+    "label": "knowledge graph"
+  },
+  {
+    "slug": "etl",
+    "label": "data pipeline etl"
+  },
+  {
+    "slug": "web-crawler",
+    "label": "web crawler"
+  },
+  {
+    "slug": "monitoring",
+    "label": "monitoring"
+  },
+  {
+    "slug": "devops",
+    "label": "devops automation"
+  },
+  {
+    "slug": "kubernetes",
+    "label": "kubernetes"
+  },
+  {
+    "slug": "aws",
+    "label": "aws automation"
+  },
+  {
+    "slug": "notion",
+    "label": "notion"
+  },
+  {
+    "slug": "slack",
+    "label": "slack bot"
+  },
+  {
+    "slug": "gmail",
+    "label": "gmail"
+  },
+  {
+    "slug": "jira",
+    "label": "jira"
+  },
+  {
+    "slug": "shopify",
+    "label": "shopify"
+  },
+  {
+    "slug": "stripe",
+    "label": "stripe"
+  },
+  {
+    "slug": "stock-analysis",
+    "label": "stock analysis"
+  },
+  {
+    "slug": "options-trading",
+    "label": "options trading"
+  },
+  {
+    "slug": "crypto-trading",
+    "label": "crypto trading"
+  },
+  {
+    "slug": "nft",
+    "label": "nft"
+  },
+  {
+    "slug": "ethereum",
+    "label": "ethereum agent"
+  },
+  {
+    "slug": "video-generation",
+    "label": "video generation"
+  },
+  {
+    "slug": "music-generation",
+    "label": "music generation"
+  },
+  {
+    "slug": "game",
+    "label": "game agent"
+  },
+  {
+    "slug": "tutoring",
+    "label": "tutoring"
+  },
+  {
+    "slug": "data-extraction",
+    "label": "data extraction"
+  },
+  {
+    "slug": "form-filling",
+    "label": "form filling"
+  },
+  {
+    "slug": "captcha",
+    "label": "captcha"
+  },
+  {
+    "slug": "api-testing",
+    "label": "api testing"
+  },
+  {
+    "slug": "data-labeling",
+    "label": "data labeling"
+  },
+  {
+    "slug": "synthetic-data",
+    "label": "synthetic data"
+  },
+  {
+    "slug": "mcp-server",
+    "label": "mcp server"
+  },
+  {
+    "slug": "langchain",
+    "label": "langchain"
+  },
+  {
+    "slug": "langgraph",
+    "label": "langgraph"
+  },
+  {
+    "slug": "crewai",
+    "label": "crewai"
+  },
+  {
+    "slug": "autogen",
+    "label": "autogen"
+  },
+  {
+    "slug": "llamaindex",
+    "label": "llamaindex"
+  },
+  {
+    "slug": "elizaos",
+    "label": "elizaos"
+  },
+  {
+    "slug": "semantic-kernel",
+    "label": "semantic kernel"
+  },
+  {
+    "slug": "n8n",
+    "label": "n8n"
+  },
+  {
+    "slug": "smolagents",
+    "label": "smolagents"
+  },
+  {
+    "slug": "pydantic-ai",
+    "label": "pydantic ai"
+  },
+  {
+    "slug": "openai-agents",
+    "label": "openai agents"
+  },
+  {
+    "slug": "dspy",
+    "label": "dspy"
+  },
+  {
+    "slug": "agno",
+    "label": "agno"
+  },
+  {
+    "slug": "autogpt",
+    "label": "autogpt"
+  },
+  {
+    "slug": "haystack",
+    "label": "haystack"
+  },
+  {
+    "slug": "mcp-server-rag",
+    "label": "mcp server rag"
+  },
+  {
+    "slug": "mcp-server-web-scraping",
+    "label": "mcp server web scraping"
+  },
+  {
+    "slug": "mcp-server-agent",
+    "label": "mcp server agent"
+  },
+  {
+    "slug": "mcp-server-chatbot",
+    "label": "mcp server chatbot"
+  },
+  {
+    "slug": "mcp-server-research",
+    "label": "mcp server research"
+  },
+  {
+    "slug": "mcp-server-automation",
+    "label": "mcp server automation"
+  },
+  {
+    "slug": "mcp-server-mcp",
+    "label": "mcp server mcp"
+  },
+  {
+    "slug": "langchain-rag",
+    "label": "langchain rag"
+  },
+  {
+    "slug": "langchain-web-scraping",
+    "label": "langchain web scraping"
+  },
+  {
+    "slug": "langchain-agent",
+    "label": "langchain agent"
+  },
+  {
+    "slug": "langchain-chatbot",
+    "label": "langchain chatbot"
+  },
+  {
+    "slug": "langchain-research",
+    "label": "langchain research"
+  },
+  {
+    "slug": "langchain-automation",
+    "label": "langchain automation"
+  },
+  {
+    "slug": "langchain-mcp",
+    "label": "langchain mcp"
+  },
+  {
+    "slug": "langgraph-rag",
+    "label": "langgraph rag"
+  },
+  {
+    "slug": "langgraph-web-scraping",
+    "label": "langgraph web scraping"
+  },
+  {
+    "slug": "langgraph-agent",
+    "label": "langgraph agent"
+  },
+  {
+    "slug": "langgraph-chatbot",
+    "label": "langgraph chatbot"
+  },
+  {
+    "slug": "langgraph-research",
+    "label": "langgraph research"
+  },
+  {
+    "slug": "langgraph-automation",
+    "label": "langgraph automation"
+  },
+  {
+    "slug": "langgraph-mcp",
+    "label": "langgraph mcp"
+  },
+  {
+    "slug": "crewai-rag",
+    "label": "crewai rag"
+  },
+  {
+    "slug": "crewai-web-scraping",
+    "label": "crewai web scraping"
+  },
+  {
+    "slug": "crewai-agent",
+    "label": "crewai agent"
+  },
+  {
+    "slug": "crewai-chatbot",
+    "label": "crewai chatbot"
+  },
+  {
+    "slug": "crewai-research",
+    "label": "crewai research"
+  },
+  {
+    "slug": "crewai-automation",
+    "label": "crewai automation"
+  },
+  {
+    "slug": "crewai-mcp",
+    "label": "crewai mcp"
+  },
+  {
+    "slug": "autogen-rag",
+    "label": "autogen rag"
+  },
+  {
+    "slug": "autogen-web-scraping",
+    "label": "autogen web scraping"
+  },
+  {
+    "slug": "autogen-agent",
+    "label": "autogen agent"
+  },
+  {
+    "slug": "autogen-chatbot",
+    "label": "autogen chatbot"
+  },
+  {
+    "slug": "autogen-research",
+    "label": "autogen research"
+  },
+  {
+    "slug": "autogen-automation",
+    "label": "autogen automation"
+  },
+  {
+    "slug": "autogen-mcp",
+    "label": "autogen mcp"
+  },
+  {
+    "slug": "llamaindex-rag",
+    "label": "llamaindex rag"
+  },
+  {
+    "slug": "llamaindex-web-scraping",
+    "label": "llamaindex web scraping"
+  },
+  {
+    "slug": "llamaindex-agent",
+    "label": "llamaindex agent"
+  },
+  {
+    "slug": "llamaindex-chatbot",
+    "label": "llamaindex chatbot"
+  },
+  {
+    "slug": "llamaindex-research",
+    "label": "llamaindex research"
+  },
+  {
+    "slug": "llamaindex-automation",
+    "label": "llamaindex automation"
+  },
+  {
+    "slug": "llamaindex-mcp",
+    "label": "llamaindex mcp"
+  },
+  {
+    "slug": "elizaos-rag",
+    "label": "elizaos rag"
+  },
+  {
+    "slug": "elizaos-web-scraping",
+    "label": "elizaos web scraping"
+  },
+  {
+    "slug": "elizaos-agent",
+    "label": "elizaos agent"
+  },
+  {
+    "slug": "elizaos-chatbot",
+    "label": "elizaos chatbot"
+  },
+  {
+    "slug": "elizaos-research",
+    "label": "elizaos research"
+  },
+  {
+    "slug": "elizaos-automation",
+    "label": "elizaos automation"
+  },
+  {
+    "slug": "elizaos-mcp",
+    "label": "elizaos mcp"
+  },
+  {
+    "slug": "semantic-kernel-rag",
+    "label": "semantic kernel rag"
+  },
+  {
+    "slug": "semantic-kernel-web-scraping",
+    "label": "semantic kernel web scraping"
+  },
+  {
+    "slug": "semantic-kernel-agent",
+    "label": "semantic kernel agent"
+  },
+  {
+    "slug": "semantic-kernel-chatbot",
+    "label": "semantic kernel chatbot"
+  },
+  {
+    "slug": "semantic-kernel-research",
+    "label": "semantic kernel research"
+  },
+  {
+    "slug": "semantic-kernel-automation",
+    "label": "semantic kernel automation"
+  },
+  {
+    "slug": "semantic-kernel-mcp",
+    "label": "semantic kernel mcp"
+  },
+  {
+    "slug": "n8n-rag",
+    "label": "n8n rag"
+  },
+  {
+    "slug": "n8n-web-scraping",
+    "label": "n8n web scraping"
+  },
+  {
+    "slug": "n8n-agent",
+    "label": "n8n agent"
+  },
+  {
+    "slug": "n8n-chatbot",
+    "label": "n8n chatbot"
+  },
+  {
+    "slug": "n8n-research",
+    "label": "n8n research"
+  },
+  {
+    "slug": "n8n-automation",
+    "label": "n8n automation"
+  },
+  {
+    "slug": "n8n-mcp",
+    "label": "n8n mcp"
+  },
+  {
+    "slug": "smolagents-rag",
+    "label": "smolagents rag"
+  },
+  {
+    "slug": "smolagents-web-scraping",
+    "label": "smolagents web scraping"
+  },
+  {
+    "slug": "smolagents-agent",
+    "label": "smolagents agent"
+  },
+  {
+    "slug": "smolagents-chatbot",
+    "label": "smolagents chatbot"
+  },
+  {
+    "slug": "smolagents-research",
+    "label": "smolagents research"
+  },
+  {
+    "slug": "smolagents-automation",
+    "label": "smolagents automation"
+  },
+  {
+    "slug": "smolagents-mcp",
+    "label": "smolagents mcp"
+  },
+  {
+    "slug": "pydantic-ai-rag",
+    "label": "pydantic ai rag"
+  },
+  {
+    "slug": "pydantic-ai-web-scraping",
+    "label": "pydantic ai web scraping"
+  },
+  {
+    "slug": "pydantic-ai-agent",
+    "label": "pydantic ai agent"
+  },
+  {
+    "slug": "pydantic-ai-chatbot",
+    "label": "pydantic ai chatbot"
+  },
+  {
+    "slug": "pydantic-ai-research",
+    "label": "pydantic ai research"
+  },
+  {
+    "slug": "pydantic-ai-automation",
+    "label": "pydantic ai automation"
+  },
+  {
+    "slug": "pydantic-ai-mcp",
+    "label": "pydantic ai mcp"
+  },
+  {
+    "slug": "openai-agents-rag",
+    "label": "openai agents rag"
+  },
+  {
+    "slug": "openai-agents-web-scraping",
+    "label": "openai agents web scraping"
+  },
+  {
+    "slug": "openai-agents-agent",
+    "label": "openai agents agent"
+  },
+  {
+    "slug": "openai-agents-chatbot",
+    "label": "openai agents chatbot"
+  },
+  {
+    "slug": "openai-agents-research",
+    "label": "openai agents research"
+  },
+  {
+    "slug": "openai-agents-automation",
+    "label": "openai agents automation"
+  },
+  {
+    "slug": "openai-agents-mcp",
+    "label": "openai agents mcp"
+  },
+  {
+    "slug": "dspy-rag",
+    "label": "dspy rag"
+  },
+  {
+    "slug": "dspy-web-scraping",
+    "label": "dspy web scraping"
+  },
+  {
+    "slug": "dspy-agent",
+    "label": "dspy agent"
+  },
+  {
+    "slug": "dspy-chatbot",
+    "label": "dspy chatbot"
+  },
+  {
+    "slug": "dspy-research",
+    "label": "dspy research"
+  },
+  {
+    "slug": "dspy-automation",
+    "label": "dspy automation"
+  },
+  {
+    "slug": "dspy-mcp",
+    "label": "dspy mcp"
+  },
+  {
+    "slug": "agno-rag",
+    "label": "agno rag"
+  },
+  {
+    "slug": "agno-web-scraping",
+    "label": "agno web scraping"
+  },
+  {
+    "slug": "agno-agent",
+    "label": "agno agent"
+  },
+  {
+    "slug": "agno-chatbot",
+    "label": "agno chatbot"
+  },
+  {
+    "slug": "agno-research",
+    "label": "agno research"
+  },
+  {
+    "slug": "agno-automation",
+    "label": "agno automation"
+  },
+  {
+    "slug": "agno-mcp",
+    "label": "agno mcp"
+  },
+  {
+    "slug": "autogpt-rag",
+    "label": "autogpt rag"
+  },
+  {
+    "slug": "autogpt-web-scraping",
+    "label": "autogpt web scraping"
+  },
+  {
+    "slug": "autogpt-agent",
+    "label": "autogpt agent"
+  },
+  {
+    "slug": "autogpt-chatbot",
+    "label": "autogpt chatbot"
+  },
+  {
+    "slug": "autogpt-research",
+    "label": "autogpt research"
+  },
+  {
+    "slug": "autogpt-automation",
+    "label": "autogpt automation"
+  },
+  {
+    "slug": "autogpt-mcp",
+    "label": "autogpt mcp"
+  },
+  {
+    "slug": "haystack-rag",
+    "label": "haystack rag"
+  },
+  {
+    "slug": "haystack-web-scraping",
+    "label": "haystack web scraping"
+  },
+  {
+    "slug": "haystack-agent",
+    "label": "haystack agent"
+  },
+  {
+    "slug": "haystack-chatbot",
+    "label": "haystack chatbot"
+  },
+  {
+    "slug": "haystack-research",
+    "label": "haystack research"
+  },
+  {
+    "slug": "haystack-automation",
+    "label": "haystack automation"
+  },
+  {
+    "slug": "haystack-mcp",
+    "label": "haystack mcp"
+  }
+]

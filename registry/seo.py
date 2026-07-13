@@ -18,6 +18,7 @@ PER_PAGE = 24
 MIN_AGENTS = 5
 YEAR = datetime.now(timezone.utc).year
 
+REGISTRY_URL = os.environ.get("PUBLIC_BASE_URL", "https://registry-ruby.vercel.app").rstrip("/")
 PORTAL_URL = os.environ.get("PORTAL_URL", "https://portal-five-phi-54.vercel.app").rstrip("/")
 
 
@@ -94,6 +95,23 @@ _SLUG_TO_LABEL = dict(CAPABILITIES)
 _ALL_SLUGS = [s for s, _ in CAPABILITIES]
 
 
+def _reload_capabilities_from_json() -> None:
+    """Sync slug list from portal/lib/seo-capabilities.json when present (CI/deploy)."""
+    global CAPABILITIES, _SLUG_TO_LABEL, _ALL_SLUGS
+    try:
+        p = __import__("pathlib").Path(__file__).resolve().parent.parent / "portal" / "lib" / "seo-capabilities.json"
+        if p.is_file():
+            data = json.loads(p.read_text(encoding="utf-8"))
+            CAPABILITIES = [(d["slug"], d["label"]) for d in data]
+            _SLUG_TO_LABEL = dict(CAPABILITIES)
+            _ALL_SLUGS = [s for s, _ in CAPABILITIES]
+    except Exception:
+        pass
+
+
+_reload_capabilities_from_json()
+
+
 def label_for_slug(slug: str) -> str:
     return _SLUG_TO_LABEL.get(slug, slug.replace("-", " "))
 
@@ -117,10 +135,11 @@ def page_html(slug: str, label: str, agents: list[dict], total: int) -> str:
     n = len(agents)
     title = f"Best {label.title()} AI Agents ({YEAR}) — {n}+ open-source | Beacon"
     desc = (
-        f"The best open-source {label} AI agents, ranked by real maintenance health "
-        f"(freshness + GitHub stars + activity). {n} actively-maintained options from "
-        f"a free index of {total:,}+ agents. No API key."
+        f"Find the best open-source {label} AI agents in seconds — ranked by maintenance health "
+        f"(freshness + GitHub stars + activity). {n} options from {total:,}+ indexed. "
+        f"Free API, no signup. Save time vs GitHub search."
     )
+    keywords = f"{label}, {label} ai agent, {label} mcp server, open source {label}, best {label} agent {YEAR}"
     top_names = [a.get("name", "") for a in agents[:3] if a.get("name")]
     top_str = ", ".join(top_names) if top_names else f"open-source {label} agents"
 
@@ -134,6 +153,13 @@ def page_html(slug: str, label: str, agents: list[dict], total: int) -> str:
         (f"How do I use a {label} agent from my editor or AI assistant?",
          f"Run 'npx -y beacon-mcp' to add Beacon as an MCP server in Cursor, Claude "
          f"Desktop, Cline, or Windsurf, then ask your AI to find a {label} agent."),
+        (f"How does Beacon save time finding a {label} agent?",
+         f"Instead of searching GitHub and reading dozens of READMEs, call "
+         f"GET {REGISTRY_URL}/api/v1/search?q={label.replace(' ', '+')} — sub-second "
+         f"results ranked by health, stars, and activity."),
+        (f"Can autonomous AI agents discover {label} tools programmatically?",
+         f"Yes. Agents read {REGISTRY_URL}/llms.txt and call POST /api/v1/discover "
+         f"with {{\"query\": \"{label}\"}} — no API key required."),
     ]
 
     items = [{
@@ -144,7 +170,8 @@ def page_html(slug: str, label: str, agents: list[dict], total: int) -> str:
     } for i, a in enumerate(agents)]
     jsonld = {"@context": "https://schema.org", "@graph": [
         {"@type": "CollectionPage", "name": title, "description": desc,
-         "url": f"{PORTAL_URL}/discover/{slug}"},
+         "url": f"{PORTAL_URL}/discover/{slug}",
+         "isPartOf": {"@type": "WebSite", "name": "Beacon", "url": PORTAL_URL}},
         {"@type": "BreadcrumbList", "itemListElement": [
             {"@type": "ListItem", "position": 1, "name": "Beacon", "item": PORTAL_URL},
             {"@type": "ListItem", "position": 2, "name": f"{label.title()} agents",
@@ -153,6 +180,20 @@ def page_html(slug: str, label: str, agents: list[dict], total: int) -> str:
         {"@type": "FAQPage", "mainEntity": [
             {"@type": "Question", "name": q,
              "acceptedAnswer": {"@type": "Answer", "text": a}} for q, a in faqs]},
+        {"@type": "HowTo", "name": f"Find a {label} AI agent with Beacon",
+         "description": f"Discover open-source {label} agents in under 1 second via API or MCP.",
+         "step": [
+             {"@type": "HowToStep", "position": 1, "name": "Search by capability",
+              "text": f"GET {REGISTRY_URL}/api/v1/search?q={label}&limit=10"},
+             {"@type": "HowToStep", "position": 2, "name": "Or use MCP in your editor",
+              "text": "Run npx -y beacon-mcp and ask your AI to find_agent"},
+             {"@type": "HowToStep", "position": 3, "name": "Pick a healthy agent",
+              "text": "Choose results with high health_score and recent activity"},
+         ]},
+        {"@type": "WebAPI", "name": "Beacon Agent Search API",
+         "description": "Free capability search over open-source AI agents",
+         "url": f"{REGISTRY_URL}/api/v1/search",
+         "documentation": f"{REGISTRY_URL}/llms.txt"},
     ]}
 
     cards = "\n".join(
@@ -172,9 +213,16 @@ def page_html(slug: str, label: str, agents: list[dict], total: int) -> str:
 <meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
 <title>{e(title)}</title>
 <meta name="description" content="{e(desc)}">
+<meta name="keywords" content="{e(keywords)}">
 <link rel="canonical" href="{PORTAL_URL}/discover/{slug}">
+<meta name="robots" content="index,follow,max-snippet:-1,max-image-preview:large">
+<meta property="og:type" content="website">
+<meta property="og:site_name" content="Beacon">
 <meta property="og:title" content="{e(title)}"><meta property="og:description" content="{e(desc)}">
-<meta property="og:url" content="{PORTAL_URL}/discover/{slug}"><meta name="robots" content="index,follow">
+<meta property="og:url" content="{PORTAL_URL}/discover/{slug}">
+<meta name="twitter:card" content="summary"><meta name="twitter:title" content="{e(title)}">
+<meta name="twitter:description" content="{e(desc)}">
+<link rel="alternate" type="text/plain" href="{REGISTRY_URL}/llms.txt" title="LLM discovery (llms.txt)">
 <script type="application/ld+json">{json.dumps(jsonld)}</script>
 <style>
 :root{{color-scheme:dark}}
@@ -198,9 +246,15 @@ footer{{margin-top:40px;color:#475569;font-size:.85rem}}
 <p><a href="{PORTAL_URL}">← Beacon</a> · open-source AI agent registry</p>
 <h1>Best {e(label.title())} AI agents</h1>
 <p class="sub">{n} actively-maintained {e(label)} agents · ranked by maintenance health · {total:,}+ indexed</p>
-<p class="intro">Looking for the best open-source {e(label)} AI agent? Beacon indexes {total:,}+ agents and MCP servers from GitHub and ranks them by real maintenance health — freshness, stars, and activity — so abandoned repos don't top the list. Below are {n} {e(label)} agents you can install today, free and with no API key.</p>
+<p class="intro">Looking for the best open-source {e(label)} AI agent? Beacon indexes {total:,}+ agents and MCP servers from GitHub and ranks them by real maintenance health — freshness, stars, and activity — so abandoned repos don't top the list. <strong>Save time:</strong> one search returns ranked, linkable agents in under a second (vs hours on GitHub). Below are {n} {e(label)} agents you can install today — free, no API key.</p>
 <a class="cta" href="{PORTAL_URL}/?q={e(slug)}">Search all {e(label)} agents →</a>
-<p>Use from your editor: <code>npx -y beacon-mcp</code> then ask your AI to find a {e(label)} agent.</p>
+<p>Use from your editor: <code>BEACON_REGISTRY_URL={REGISTRY_URL} npx -y beacon-mcp</code> — ask your AI to find a {e(label)} agent.</p>
+<h2>For autonomous agents (API)</h2>
+<p class="intro">Free, keyless discovery — paste into your agent workflow:</p>
+<pre style="background:#14141f;border:1px solid rgba(255,255,255,.1);border-radius:10px;padding:12px;overflow:auto;font-size:.8rem;color:#a5b4fc">GET {REGISTRY_URL}/api/v1/search?q={e(label.replace(' ', '+'))}&amp;limit=10
+POST {REGISTRY_URL}/api/v1/discover
+  Body: {{"query": "{e(label)}", "limit": 10}}</pre>
+<p><a href="{REGISTRY_URL}/llms.txt">llms.txt</a> · <a href="{PORTAL_URL}/for-agents.html">Why agents use Beacon</a></p>
 <h2>Top {n} {e(label)} agents</h2>
 {cards}
 <h2>Frequently asked questions</h2>
@@ -241,7 +295,13 @@ def sitemap_xml(slugs: Optional[list[str]] = None) -> str:
 
 
 def robots_txt() -> str:
-    return "User-agent: *\nAllow: /\n\n" + f"Sitemap: {PORTAL_URL}/sitemap.xml\n"
+    return (
+        "User-agent: *\nAllow: /\n\n"
+        "# AI crawlers — machine-readable discovery\n"
+        f"# llms.txt: {REGISTRY_URL}/llms.txt\n"
+        f"# OpenAPI: {REGISTRY_URL}/openapi.json\n\n"
+        f"Sitemap: {PORTAL_URL}/sitemap.xml\n"
+    )
 
 
 def build_discover_page(

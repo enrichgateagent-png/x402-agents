@@ -27,7 +27,8 @@ jobs:
           KEY = "f2471131bfef1dcf3b4f3c3940fae849"
           HOST = "registry-ruby.vercel.app"
           base = f"https://{HOST}"
-          urls = [f"{base}/"] + [f"{base}/discover/{s}" for s, _ in seo.CAPABILITIES]
+          PORTAL = "https://portal-five-phi-54.vercel.app"
+          urls = [f"{base}/", f"{PORTAL}/for-agents.html"] + [f"{PORTAL}/discover/{s}" for s, _ in seo.CAPABILITIES[:120]]
           payload = {"host": HOST, "key": KEY,
                      "keyLocation": f"{base}/{KEY}.txt", "urlList": urls}
           req = urllib.request.Request(

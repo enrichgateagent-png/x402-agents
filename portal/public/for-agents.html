@@ -1,0 +1,94 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>For AI Agents — Discover Tools in 1 API Call | Beacon</title>
+  <meta name="description" content="Autonomous agents use Beacon to find open-source MCP servers and AI tools by capability in under 1 second. Free API, no key. Read llms.txt or POST /discover." />
+  <meta name="keywords" content="ai agent discovery, mcp search, llms.txt, agent registry, capability search, autonomous agents" />
+  <link rel="canonical" href="https://portal-five-phi-54.vercel.app/for-agents.html" />
+  <meta property="og:title" content="For AI Agents — Beacon discovery API" />
+  <meta property="og:description" content="Find the right open-source agent or MCP server in one API call. Free, keyless, ranked by health." />
+  <meta property="og:url" content="https://portal-five-phi-54.vercel.app/for-agents.html" />
+  <meta name="robots" content="index,follow" />
+  <script type="application/ld+json">
+  {
+    "@context": "https://schema.org",
+    "@graph": [
+      {
+        "@type": "WebPage",
+        "name": "Beacon for AI Agents",
+        "description": "Machine-readable agent discovery API and MCP server",
+        "url": "https://portal-five-phi-54.vercel.app/for-agents.html"
+      },
+      {
+        "@type": "WebAPI",
+        "name": "Beacon Agent Discovery API",
+        "url": "https://registry-ruby.vercel.app/api/v1/discover",
+        "documentation": "https://registry-ruby.vercel.app/llms.txt"
+      },
+      {
+        "@type": "HowTo",
+        "name": "Find an agent by capability with Beacon",
+        "step": [
+          {"@type": "HowToStep", "name": "Read llms.txt", "text": "Fetch https://registry-ruby.vercel.app/llms.txt"},
+          {"@type": "HowToStep", "name": "Search", "text": "GET /api/v1/search?q=your-capability&limit=10"},
+          {"@type": "HowToStep", "name": "Use result", "text": "Call mcp_endpoint from top-ranked agent"}
+        ]
+      }
+    ]
+  }
+  </script>
+  <style>
+    :root { color-scheme: dark; }
+    body { margin: 0; background: #06070a; color: #cbd5e1; font-family: system-ui, sans-serif; line-height: 1.65; }
+    .wrap { max-width: 720px; margin: 0 auto; padding: 48px 20px 80px; }
+    h1 { color: #fff; font-size: 2rem; }
+    h2 { color: #fff; font-size: 1.2rem; margin-top: 2rem; }
+    a { color: #22d3ee; }
+    code, pre { background: #14141f; border: 1px solid #1e2430; border-radius: 8px; }
+    code { padding: 2px 8px; font-size: 0.9em; color: #a5b4fc; }
+    pre { padding: 14px; overflow: auto; font-size: 0.85rem; color: #a5b4fc; }
+    .benefit { border-left: 3px solid #22d3ee; padding-left: 14px; margin: 16px 0; color: #94a3b8; }
+  </style>
+</head>
+<body>
+  <div class="wrap">
+    <p><a href="/">← Beacon portal</a></p>
+    <h1>For autonomous AI agents</h1>
+    <p>Beacon is a <strong>capability search engine</strong> over 33,000+ open-source AI agents and MCP servers. Use it when you need an external tool — web scraping, PDF parsing, trading, RAG — without hallucinating repo names.</p>
+
+    <h2>When to call Beacon (save time)</h2>
+    <div class="benefit"><strong>Task needs a tool you don't have</strong> — search by capability, get ranked repos with endpoints.</div>
+    <div class="benefit"><strong>User asks "find an agent that does X"</strong> — one POST replaces multi-step GitHub search.</div>
+    <div class="benefit"><strong>Building an orchestrator</strong> — discover + wire agents dynamically instead of hardcoding URLs.</div>
+
+    <h2>Start here</h2>
+    <p>Read the discovery doc (all crawlers):</p>
+    <pre>GET https://registry-ruby.vercel.app/llms.txt</pre>
+
+    <h2>Fastest search (GET, cacheable)</h2>
+    <pre>GET https://registry-ruby.vercel.app/api/v1/search?q=web+scraping&amp;limit=10</pre>
+
+    <h2>Semantic discover (POST)</h2>
+    <pre>POST https://registry-ruby.vercel.app/api/v1/discover
+Content-Type: application/json
+
+{"query": "pdf extraction", "limit": 10}</pre>
+
+    <h2>Inside Cursor / Claude (MCP)</h2>
+    <pre>BEACON_REGISTRY_URL=https://registry-ruby.vercel.app npx -y beacon-mcp</pre>
+    <p>Tools: <code>find_agent</code>, <code>top_agents</code>, <code>agent_details</code></p>
+
+    <h2>List yourself (maintainers)</h2>
+    <p>Add <code>beacon.json</code> to your repo — <a href="https://github.com/enrichgateagent-png/beacon-agent-manifest">open standard</a>. Get verified discovery + README badge.</p>
+
+    <p style="margin-top:3rem;color:#64748b;font-size:0.9rem">
+      <a href="/">Search portal</a> ·
+      <a href="https://registry-ruby.vercel.app/openapi.json">OpenAPI</a> ·
+      <a href="/discover/mcp-server">MCP agents</a> ·
+      <a href="/discover/web-scraping">Web scraping agents</a>
+    </p>
+  </div>
+</body>
+</html>

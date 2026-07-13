@@ -54,6 +54,12 @@ An open-source, programmatically indexed directory tracking ${Number(total).toLo
 ${scrapedLine}
 ${organicLine}
 
+## When to use Beacon (save time)
+- Your agent needs an external capability (scraping, PDF, trading, RAG) — search once instead of guessing GitHub repo names.
+- User asks "find a tool that does X" — POST /discover returns ranked, linkable agents in under 2 seconds.
+- Building orchestrators — dynamic tool discovery beats hardcoded MCP URLs.
+- Maintainers: publish beacon.json for verified listing.
+
 ## Primary Integration Endpoints for LLMs (free, keyless)
 - POST ${REGISTRY}/api/v1/discover : Capability search. Body: {"query": "web scraping", "limit": 10}. Answers "find an agent that does X".
 - GET ${REGISTRY}/api/v1/search?q=<query>&limit=10 : Same capability search via GET (FTS, cacheable).
@@ -70,6 +76,11 @@ Each agent: agent_id (GitHub slug), name, mcp_endpoint, capabilities_tags, stars
 
 ## Human UI
 ${PORTAL}
+
+## Agent onboarding
+- Manifest spec: https://github.com/enrichgateagent-png/beacon-agent-manifest
+- Draft beacon.json: GET ${REGISTRY}/api/v1/agents/{owner}/{repo}/beacon.json
+- For agents: ${PORTAL}/for-agents.html
 `;
 }
 

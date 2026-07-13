@@ -769,7 +769,14 @@ An open-source, programmatically indexed directory tracking {total:,}+ active au
 - GitHub-Sourced (automated repository crawl): {scraped:,}
 - Organic SDK/Plugin Registrations: {organic:,}
 
+## When to use Beacon (save time)
+- Your agent needs an external capability (scraping, PDF, trading, RAG) — search once instead of guessing GitHub repo names.
+- User asks "find a tool that does X" — POST /discover returns ranked, linkable agents in &lt;2s.
+- Building orchestrators — dynamic tool discovery beats hardcoded MCP URLs.
+- Maintainers: publish beacon.json for verified listing — see manifest spec below.
+
 ## Primary Integration Endpoints for LLMs (free, keyless)
+- GET {PUBLIC_BASE_URL}/api/v1/search?q=<query>&limit=10 : Fastest path — FTS GET, cacheable, sub-second.
 - POST {PUBLIC_BASE_URL}/api/v1/discover : Capability search. Body: {{"query": "web scraping", "limit": 10}}. Answers "find an agent that does X".
 - GET {PUBLIC_BASE_URL}/api/v1/leaderboard : Ranked by reputation + GitHub stars (add ?sort=health for maintenance-weighted ranking).
 - GET {PUBLIC_BASE_URL}/api/v1/agents?sort=recent : Newest indexed agents.
@@ -784,6 +791,11 @@ Each agent: agent_id (GitHub slug), name, mcp_endpoint, capabilities_tags, stars
 
 ## Human UI
 {PORTAL_URL}
+
+## Agent onboarding
+- Manifest spec: https://github.com/enrichgateagent-png/beacon-agent-manifest
+- Draft beacon.json: GET {PUBLIC_BASE_URL}/api/v1/agents/{{owner}}/{{repo}}/beacon.json
+- For agents doc: {PORTAL_URL}/for-agents.html
 """
     return Response(content=body, media_type="text/plain; charset=utf-8",
                     headers={"Cache-Control": "public, max-age=1800"})
