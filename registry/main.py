@@ -721,6 +721,8 @@ An open-source, programmatically indexed directory tracking {total:,}+ active au
 - GET {PUBLIC_BASE_URL}/api/v1/agents?sort=recent : Newest indexed agents.
 - GET {PUBLIC_BASE_URL}/api/v1/agents?sort=health : Ranked by push freshness + stars + issue load.
 - GET {PUBLIC_BASE_URL}/api/v1/agents/{{owner}}/{{repo}}/badge.svg : Live SVG status/verification badge.
+- POST {PUBLIC_BASE_URL}/api/v1/manifest/ingest : Register a verified, self-declared agent from a Beacon Agent Manifest. Body: {{"url": "https://.../beacon.json"}}. Standard: https://github.com/enrichgateagent-png/beacon-agent-manifest
+- POST {PUBLIC_BASE_URL}/api/v1/manifest/validate : Schema-check a Beacon Agent Manifest (no side effects). Body: {{"manifest": {{...}}}}.
 - Local Tool Engine (MCP): `npx -y beacon-mcp` — zero-config, zero-auth agent discovery inside Cursor, Claude Desktop, Cline, Windsurf.
 
 ## Data Shape
