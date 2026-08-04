@@ -17,7 +17,7 @@
       "owner": "utensils",
       "agent_id": "utensils/mcp-nixos",
       "url": "https://github.com/utensils/mcp-nixos/pull/186",
-      "state": "OPEN",
+      "state": "CLOSED",
       "merged_at": null,
       "scan_triggered_at": null
     },
