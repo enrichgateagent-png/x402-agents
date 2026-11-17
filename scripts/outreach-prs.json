@@ -47,7 +47,7 @@
       "owner": "SigNoz",
       "agent_id": "SigNoz/signoz-mcp-server",
       "url": "https://github.com/SigNoz/signoz-mcp-server/pull/234",
-      "state": "OPEN",
+      "state": "CLOSED",
       "merged_at": null,
       "scan_triggered_at": null
     }
